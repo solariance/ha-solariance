@@ -1,0 +1,205 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Solariance",
+        "description": "Paste a personal API token. Create one at {token_url} (Account → API tokens); read-only is enough.",
+        "data": {
+          "api_token": "API token"
+        },
+        "data_description": {
+          "api_token": "The token is checked by listing your systems."
+        }
+      },
+      "system": {
+        "title": "Choose a system",
+        "description": "Each Solariance system becomes its own entry. Add the integration again for another system.",
+        "data": {
+          "system_id": "System"
+        }
+      },
+      "reauth_confirm": {
+        "title": "New API token for {name}",
+        "description": "Solariance refused the stored token (revoked or expired). Paste a new one from {token_url}.",
+        "data": {
+          "api_token": "API token"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Solariance refused this token. Check that it was copied completely and is still active.",
+      "cannot_connect": "Solariance could not be reached. Try again in a moment.",
+      "rate_limited": "Your account's hourly request limit is used up. Try again later.",
+      "no_systems": "This account has no PV system yet. Create one in the Solariance app first.",
+      "system_not_in_account": "This token belongs to an account without this system.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "Every system of this account is already set up.",
+      "reauth_successful": "The new token is saved."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Solariance options",
+        "data": {
+          "scan_interval": "Update the forecast every"
+        },
+        "data_description": {
+          "scan_interval": "The forecast changes with each weather model run, a few times a day. Free and Plus accounts share 30 forecast requests per hour with the Solariance app."
+        }
+      }
+    }
+  },
+  "selector": {
+    "scan_interval": {
+      "options": {
+        "15": "15 minutes",
+        "30": "30 minutes",
+        "60": "60 minutes"
+      }
+    },
+    "resolution": {
+      "options": {
+        "hour": "Hourly",
+        "quarter_hour": "Quarter-hourly"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "energy_production_today": {
+        "name": "Estimated energy production - today"
+      },
+      "energy_production_today_remaining": {
+        "name": "Estimated energy production - remaining today"
+      },
+      "energy_production_tomorrow": {
+        "name": "Estimated energy production - tomorrow"
+      },
+      "power_production_now": {
+        "name": "Estimated power production - now"
+      },
+      "power_production_next_hour": {
+        "name": "Estimated power production - next hour"
+      },
+      "power_production_next_12hours": {
+        "name": "Estimated power production - next 12 hours"
+      },
+      "power_production_next_24hours": {
+        "name": "Estimated power production - next 24 hours"
+      },
+      "energy_current_hour": {
+        "name": "Estimated energy production - this hour"
+      },
+      "energy_next_hour": {
+        "name": "Estimated energy production - next hour"
+      },
+      "power_highest_peak_time_today": {
+        "name": "Highest power peak time - today"
+      },
+      "power_highest_peak_time_tomorrow": {
+        "name": "Highest power peak time - tomorrow"
+      },
+      "power_peak_today": {
+        "name": "Highest power peak - today"
+      },
+      "power_peak_tomorrow": {
+        "name": "Highest power peak - tomorrow"
+      },
+      "production_start_today": {
+        "name": "Production start - today"
+      },
+      "production_end_today": {
+        "name": "Production end - today"
+      },
+      "energy_production_day_3": {
+        "name": "Estimated energy production - day 3"
+      },
+      "energy_production_day_4": {
+        "name": "Estimated energy production - day 4"
+      },
+      "energy_production_day_5": {
+        "name": "Estimated energy production - day 5"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Solariance refused the API token."
+    },
+    "rate_limited": {
+      "message": "The account's hourly request limit is used up; the forecast is fetched again when it resets."
+    },
+    "cannot_connect": {
+      "message": "Solariance could not be reached."
+    },
+    "no_forecast_yet": {
+      "message": "Solariance has not computed a forecast for this system yet."
+    },
+    "unreadable_forecast": {
+      "message": "Solariance answered with a forecast this integration cannot read."
+    },
+    "entry_not_found": {
+      "message": "No Solariance entry with the ID {entry_id}."
+    },
+    "entry_not_loaded": {
+      "message": "{name} has no forecast loaded right now."
+    }
+  },
+  "services": {
+    "get_forecast": {
+      "name": "Get forecast",
+      "description": "Returns the forecast of a Solariance system as response data.",
+      "fields": {
+        "config_entry_id": {
+          "name": "System",
+          "description": "The Solariance system."
+        },
+        "day": {
+          "name": "Day",
+          "description": "0 = today, 1 = tomorrow, … Leave empty for every day available."
+        },
+        "resolution": {
+          "name": "Resolution",
+          "description": "Hourly or quarter-hourly values."
+        }
+      }
+    },
+    "find_surplus_window": {
+      "name": "Find surplus window",
+      "description": "Finds the time window in which a load is covered best by the forecast solar surplus, e.g. to start a dishwasher or charge a car.",
+      "fields": {
+        "config_entry_id": {
+          "name": "System",
+          "description": "The Solariance system."
+        },
+        "load_kw": {
+          "name": "Load",
+          "description": "Power the device draws while running."
+        },
+        "duration_hours": {
+          "name": "Duration",
+          "description": "How long it runs."
+        },
+        "baseline_kw": {
+          "name": "Base load",
+          "description": "What the home draws anyway; only power above it counts as surplus."
+        },
+        "day": {
+          "name": "Day",
+          "description": "0 = today (only windows that have not started), 1 = tomorrow, …"
+        },
+        "electricity_price_eur_per_kwh": {
+          "name": "Electricity price",
+          "description": "Optional: to estimate the saving."
+        },
+        "feed_in_tariff_eur_per_kwh": {
+          "name": "Feed-in tariff",
+          "description": "Optional: subtracted from the price for the saving."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,205 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solariance verbinden",
+        "description": "Fügen Sie einen persönlichen API-Token ein. Sie erstellen ihn unter {token_url} (Konto → API-Tokens); Lesezugriff genügt.",
+        "data": {
+          "api_token": "API-Token"
+        },
+        "data_description": {
+          "api_token": "Der Token wird geprüft, indem Ihre Anlagen abgerufen werden."
+        }
+      },
+      "system": {
+        "title": "Anlage wählen",
+        "description": "Jede Solariance-Anlage wird ein eigener Eintrag. Für eine weitere Anlage fügen Sie die Integration erneut hinzu.",
+        "data": {
+          "system_id": "Anlage"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Neuer API-Token für {name}",
+        "description": "Solariance hat den gespeicherten Token abgelehnt (widerrufen oder abgelaufen). Fügen Sie einen neuen von {token_url} ein.",
+        "data": {
+          "api_token": "API-Token"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Solariance hat diesen Token abgelehnt. Prüfen Sie, ob er vollständig kopiert und noch aktiv ist.",
+      "cannot_connect": "Solariance ist gerade nicht erreichbar. Versuchen Sie es gleich noch einmal.",
+      "rate_limited": "Das stündliche Abfragelimit Ihres Kontos ist aufgebraucht. Versuchen Sie es später erneut.",
+      "no_systems": "Dieses Konto hat noch keine PV-Anlage. Legen Sie zuerst eine in der Solariance-App an.",
+      "system_not_in_account": "Dieser Token gehört zu einem Konto ohne diese Anlage.",
+      "unknown": "Unerwarteter Fehler."
+    },
+    "abort": {
+      "already_configured": "Alle Anlagen dieses Kontos sind bereits eingerichtet.",
+      "reauth_successful": "Der neue Token ist gespeichert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Solariance-Optionen",
+        "data": {
+          "scan_interval": "Prognose aktualisieren alle"
+        },
+        "data_description": {
+          "scan_interval": "Die Prognose ändert sich mit jedem Lauf des Wettermodells, einige Male am Tag. Free- und Plus-Konten teilen sich 30 Prognoseabfragen pro Stunde mit der Solariance-App."
+        }
+      }
+    }
+  },
+  "selector": {
+    "scan_interval": {
+      "options": {
+        "15": "15 Minuten",
+        "30": "30 Minuten",
+        "60": "60 Minuten"
+      }
+    },
+    "resolution": {
+      "options": {
+        "hour": "Stündlich",
+        "quarter_hour": "Viertelstündlich"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "energy_production_today": {
+        "name": "Prognose Energieerzeugung – heute"
+      },
+      "energy_production_today_remaining": {
+        "name": "Prognose Energieerzeugung – Rest heute"
+      },
+      "energy_production_tomorrow": {
+        "name": "Prognose Energieerzeugung – morgen"
+      },
+      "power_production_now": {
+        "name": "Prognose Leistung – jetzt"
+      },
+      "power_production_next_hour": {
+        "name": "Prognose Leistung – in einer Stunde"
+      },
+      "power_production_next_12hours": {
+        "name": "Prognose Leistung – in 12 Stunden"
+      },
+      "power_production_next_24hours": {
+        "name": "Prognose Leistung – in 24 Stunden"
+      },
+      "energy_current_hour": {
+        "name": "Prognose Energieerzeugung – diese Stunde"
+      },
+      "energy_next_hour": {
+        "name": "Prognose Energieerzeugung – nächste Stunde"
+      },
+      "power_highest_peak_time_today": {
+        "name": "Zeitpunkt der Spitzenleistung – heute"
+      },
+      "power_highest_peak_time_tomorrow": {
+        "name": "Zeitpunkt der Spitzenleistung – morgen"
+      },
+      "power_peak_today": {
+        "name": "Spitzenleistung – heute"
+      },
+      "power_peak_tomorrow": {
+        "name": "Spitzenleistung – morgen"
+      },
+      "production_start_today": {
+        "name": "Erzeugungsbeginn – heute"
+      },
+      "production_end_today": {
+        "name": "Erzeugungsende – heute"
+      },
+      "energy_production_day_3": {
+        "name": "Prognose Energieerzeugung – Tag 3"
+      },
+      "energy_production_day_4": {
+        "name": "Prognose Energieerzeugung – Tag 4"
+      },
+      "energy_production_day_5": {
+        "name": "Prognose Energieerzeugung – Tag 5"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Solariance hat den API-Token abgelehnt."
+    },
+    "rate_limited": {
+      "message": "Das stündliche Abfragelimit des Kontos ist aufgebraucht; die Prognose wird nach dem Zurücksetzen erneut abgerufen."
+    },
+    "cannot_connect": {
+      "message": "Solariance ist nicht erreichbar."
+    },
+    "no_forecast_yet": {
+      "message": "Solariance hat für diese Anlage noch keine Prognose berechnet."
+    },
+    "unreadable_forecast": {
+      "message": "Solariance hat eine Prognose geliefert, die diese Integration nicht lesen kann."
+    },
+    "entry_not_found": {
+      "message": "Kein Solariance-Eintrag mit der ID {entry_id}."
+    },
+    "entry_not_loaded": {
+      "message": "Für {name} ist gerade keine Prognose geladen."
+    }
+  },
+  "services": {
+    "get_forecast": {
+      "name": "Prognose abrufen",
+      "description": "Gibt die Prognose einer Solariance-Anlage als Antwortdaten zurück.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Anlage",
+          "description": "Die Solariance-Anlage."
+        },
+        "day": {
+          "name": "Tag",
+          "description": "0 = heute, 1 = morgen, … Leer lassen für alle verfügbaren Tage."
+        },
+        "resolution": {
+          "name": "Auflösung",
+          "description": "Stündliche oder viertelstündliche Werte."
+        }
+      }
+    },
+    "find_surplus_window": {
+      "name": "Überschussfenster finden",
+      "description": "Findet das Zeitfenster, in dem ein Verbraucher am besten vom prognostizierten Solarüberschuss gedeckt wird, etwa um die Spülmaschine zu starten oder das Auto zu laden.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Anlage",
+          "description": "Die Solariance-Anlage."
+        },
+        "load_kw": {
+          "name": "Leistung",
+          "description": "Leistung des Geräts während des Betriebs."
+        },
+        "duration_hours": {
+          "name": "Dauer",
+          "description": "Wie lange es läuft."
+        },
+        "baseline_kw": {
+          "name": "Grundlast",
+          "description": "Was das Haus ohnehin verbraucht; nur Leistung darüber zählt als Überschuss."
+        },
+        "day": {
+          "name": "Tag",
+          "description": "0 = heute (nur noch nicht begonnene Fenster), 1 = morgen, …"
+        },
+        "electricity_price_eur_per_kwh": {
+          "name": "Strompreis",
+          "description": "Optional: für die geschätzte Ersparnis."
+        },
+        "feed_in_tariff_eur_per_kwh": {
+          "name": "Einspeisevergütung",
+          "description": "Optional: wird für die Ersparnis vom Preis abgezogen."
+        }
+      }
+    }
+  }
+}

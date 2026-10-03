@@ -1,0 +1,13 @@
+{
+  "domain": "solariance",
+  "name": "Solariance",
+  "codeowners": ["@solariance"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/solariance/ha-solariance",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/solariance/ha-solariance/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
