@@ -132,6 +132,9 @@
     "rate_limited": {
       "message": "Das stündliche Abfragelimit des Kontos ist aufgebraucht; die Prognose wird nach dem Zurücksetzen erneut abgerufen."
     },
+    "system_paused": {
+      "message": "Solariance hat diese Anlage pausiert, weil Ihr Tarif sie nicht abdeckt (mehr oder größere Anlagen, als der Tarif erlaubt). Ändern Sie den Tarif oder entfernen Sie eine Anlage auf solariance.de; die Prognose wird stündlich erneut geprüft."
+    },
     "cannot_connect": {
       "message": "Solariance ist nicht erreichbar."
     },

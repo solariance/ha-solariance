@@ -132,6 +132,9 @@
     "rate_limited": {
       "message": "The account's hourly request limit is used up; the forecast is fetched again when it resets."
     },
+    "system_paused": {
+      "message": "Solariance has paused this system because your plan does not cover it (more systems or a larger system than the plan allows). Change your plan or remove a system at solariance.de; the forecast is checked again hourly."
+    },
     "cannot_connect": {
       "message": "Solariance could not be reached."
     },

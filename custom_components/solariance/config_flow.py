@@ -23,6 +23,7 @@ from .api import (
     SolarianceAuthError,
     SolarianceError,
     SolarianceRateLimitError,
+    normalise_token,
 )
 from .const import (
     CONF_API_TOKEN,
@@ -85,7 +86,7 @@ class SolarianceConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            token = user_input[CONF_API_TOKEN].strip()
+            token = normalise_token(user_input[CONF_API_TOKEN])
             systems, errors = await self._async_validate(token)
             if not errors:
                 self._token, self._systems = token, systems
@@ -124,7 +125,7 @@ class SolarianceConfigFlow(ConfigFlow, domain=DOMAIN):
         entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
-            token = user_input[CONF_API_TOKEN].strip()
+            token = normalise_token(user_input[CONF_API_TOKEN])
             systems, errors = await self._async_validate(token)
             if not errors and not any(s["system_id"] == entry.data[CONF_SYSTEM_ID]
                                       for s in systems):

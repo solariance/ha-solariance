@@ -14,6 +14,7 @@ from .api import (
     SolarianceAuthError,
     SolarianceError,
     SolarianceRateLimitError,
+    SolarianceSystemPausedError,
 )
 from .const import (
     CONF_API_TOKEN,
@@ -26,6 +27,27 @@ from .const import (
 from .forecast import ForecastFormatError, SolarForecast, parse_power_forecast
 
 type SolarianceConfigEntry = ConfigEntry[SolarianceCoordinator]
+
+# A paused system stays paused until the plan changes; look again hourly.
+PAUSED_RETRY_S = 3600.0
+
+
+class WaitForSolariance(UpdateFailed):
+    """A failed fetch that only waiting fixes: the hourly limit is spent, no
+    forecast is computed yet, or the plan has paused the system. Retrying
+    sooner adds refused calls to the budget the Solariance app shares."""
+
+
+class RateLimited(WaitForSolariance):
+    """429: the account's hourly request limit is spent."""
+
+
+class NoForecastYet(WaitForSolariance):
+    """204: Solariance has not computed a forecast for the system yet."""
+
+
+class SystemPaused(WaitForSolariance):
+    """403 system_locked: the account's plan has paused the system."""
 
 
 class SolarianceCoordinator(DataUpdateCoordinator[SolarForecast]):
@@ -53,16 +75,21 @@ class SolarianceCoordinator(DataUpdateCoordinator[SolarForecast]):
             # Revoked or expired token: Home Assistant asks for a new one.
             raise ConfigEntryAuthFailed(translation_domain=DOMAIN,
                                         translation_key="auth_failed") from err
+        except SolarianceSystemPausedError as err:
+            # Not the token's fault: a new token would be paused too. Say why
+            # and look again hourly (an upgraded plan lifts the pause).
+            raise SystemPaused(translation_domain=DOMAIN, translation_key="system_paused",
+                               retry_after=PAUSED_RETRY_S) from err
         except SolarianceRateLimitError as err:
             # The account's hourly limit is shared with the Solariance app;
             # wait as long as the API asks instead of adding to it.
-            raise UpdateFailed(translation_domain=DOMAIN, translation_key="rate_limited",
-                               retry_after=err.retry_after) from err
+            raise RateLimited(translation_domain=DOMAIN, translation_key="rate_limited",
+                              retry_after=err.retry_after) from err
         except SolarianceError as err:
             raise UpdateFailed(translation_domain=DOMAIN,
                                translation_key="cannot_connect") from err
         if data is None:
-            raise UpdateFailed(translation_domain=DOMAIN, translation_key="no_forecast_yet")
+            raise NoForecastYet(translation_domain=DOMAIN, translation_key="no_forecast_yet")
         try:
             return parse_power_forecast(data)
         except ForecastFormatError as err:

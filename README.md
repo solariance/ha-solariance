@@ -66,8 +66,44 @@ response_variable: window
 ```
 
 The response holds `found`, `window_start`, `window_end` (ISO time with offset), `pv_covered_kwh`,
-`grid_kwh`, `pv_coverage_percent` and, with a price, `estimated_saving_eur`. Example: start the
-dishwasher at the window's start with a time trigger on `window.window_start`.
+`grid_kwh`, `pv_coverage_percent` and, with a price, `estimated_saving_eur`.
+
+Example: plan the dishwasher in the morning and start it at the window's start. The response only
+exists inside the automation that called the action, so the start time goes into a date-and-time
+helper (Settings → Devices & services → Helpers → Create helper → Date and/or time, with date and
+time), and a second automation fires at it:
+
+```yaml
+# 1. Plan: every morning at 07:00
+triggers:
+  - trigger: time
+    at: "07:00:00"
+actions:
+  - action: solariance.find_surplus_window
+    data:
+      config_entry_id: <your Solariance entry>
+      load_kw: 2.0
+      duration_hours: 2
+    response_variable: window
+  - if: "{{ window.found }}"
+    then:
+      # As a timestamp: the helper would drop the time's offset and store the
+      # wrong clock time whenever Home Assistant runs in another time zone.
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.dishwasher_start
+        data:
+          timestamp: "{{ as_timestamp(window.window_start) }}"
+
+# 2. Start: when that time comes
+triggers:
+  - trigger: time
+    at: input_datetime.dishwasher_start
+actions:
+  - action: switch.turn_on
+    target:
+      entity_id: switch.dishwasher_plug
+```
 
 **`solariance.get_forecast`** returns the forecast per day (hourly or quarter-hourly) as response data.
 
@@ -76,7 +112,8 @@ dishwasher at the window's start with a time trigger on `window.window_start`.
 The free plan covers today and tomorrow; Plus and above cover five days. Forecast requests are limited
 per account (30 per hour on Free and Plus) and the limit is shared with the Solariance app. At the
 default 30-minute interval the integration uses 2 requests per hour per system. If the limit is hit,
-the integration waits as long as the API asks and the sensors show *unavailable* meanwhile.
+the integration does not retry early (refused requests count too): it waits for the next update, or
+as long as the API asks, and the sensors show *unavailable* meanwhile.
 
 ## Troubleshooting
 
@@ -84,6 +121,9 @@ the integration waits as long as the API asks and the sensors show *unavailable*
   with the next model run; Home Assistant retries on its own.
 - **Re-authentication requested**: the token was revoked or expired. Create a new one and paste it in
   the repair dialog.
+- **"Solariance has paused this system"**: the account has more systems, or a larger one, than its
+  plan covers. The token is fine; change the plan or remove a system at solariance.de. The
+  integration checks again every hour.
 - **Diagnostics**: the integration's ⋮ menu → Download diagnostics (the token is removed).
 
 ## Removal

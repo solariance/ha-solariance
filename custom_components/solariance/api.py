@@ -10,7 +10,9 @@ as a session token and answers 401. A read-only token is enough.
 
 ANSWERS. Every answer is the envelope {"code", "message", "data"}. GET
 forecast/power answers 204 while the system has no forecast yet (a new system,
-or the first model run of the day not computed), which is not an error.
+or the first model run of the day not computed), which is not an error. A 403
+with data.reason "system_locked" means the account's plan has paused the
+system (too many systems, or too large for the plan); the token is fine then.
 """
 from __future__ import annotations
 
@@ -36,6 +38,14 @@ class SolarianceConnectionError(SolarianceError):
     """The API could not be reached or answered with a server error."""
 
 
+class SolarianceSystemPausedError(SolarianceError):
+    """The account's plan has paused this system (403 "system_locked")."""
+
+    def __init__(self, reason: str | None) -> None:
+        super().__init__(f"system paused by the plan ({reason})")
+        self.reason = reason
+
+
 class SolarianceRateLimitError(SolarianceError):
     """The account's hourly request limit is spent."""
 
@@ -50,7 +60,7 @@ class SolarianceApiClient:
     def __init__(self, session: aiohttp.ClientSession, token: str,
                  base_url: str = API_BASE) -> None:
         self._session = session
-        self._token = token.strip()
+        self._token = normalise_token(token)
         self._base = base_url.rstrip("/")
 
     async def _get(self, path: str, params: dict[str, str] | None = None) -> Any:
@@ -65,6 +75,8 @@ class SolarianceApiClient:
                                          headers=headers, timeout=_TIMEOUT) as resp:
                 if resp.status == 204:
                     return None
+                if resp.status == 403 and (paused := await _paused(resp)) is not None:
+                    raise SolarianceSystemPausedError(paused or None)
                 if resp.status in (401, 403):
                     raise SolarianceAuthError(f"{path}: HTTP {resp.status}")
                 if resp.status == 429:
@@ -96,6 +108,29 @@ class SolarianceApiClient:
         """
         data = await self._get("forecast/power", {"system_id": system_id})
         return data if isinstance(data, dict) else None
+
+
+def normalise_token(token: str) -> str:
+    """The token as solariance.de/user issued it. Pasted from a secrets.yaml
+    line (the website's REST guide) it can carry "Bearer " in front, which
+    would otherwise go out as "Bearer Bearer ..." and be refused."""
+    token = token.strip()
+    if token[:7].lower() == "bearer ":
+        token = token[7:].strip()
+    return token
+
+
+async def _paused(resp: aiohttp.ClientResponse) -> str | None:
+    """For a 403: the plan's lock reason ("" when none is given) if the system
+    is paused, None for any other refusal."""
+    try:
+        body = await resp.json(content_type=None)
+    except (aiohttp.ContentTypeError, ValueError):
+        return None
+    data = body.get("data") if isinstance(body, dict) else None
+    if isinstance(data, dict) and data.get("reason") == "system_locked":
+        return str(data.get("locked_reason") or "")
+    return None
 
 
 def _retry_after(value: str | None) -> float | None:

@@ -5,12 +5,13 @@ from datetime import datetime
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN
-from .coordinator import SolarianceConfigEntry, SolarianceCoordinator
+from .const import DOMAIN, LOGGER
+from .coordinator import SolarianceConfigEntry, SolarianceCoordinator, WaitForSolariance
 from .services import async_setup_services
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -27,7 +28,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -> bool:
     """Set up one Solariance system."""
     coordinator = SolarianceCoordinator(hass, entry)
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except ConfigEntryNotReady:
+        # A spent hourly limit, no forecast yet or a paused system: retrying
+        # setup on Home Assistant's own schedule (5, 10, 20 s ... then every
+        # 10 min) would add refused calls to the limit the Solariance app
+        # shares, and refused calls count. Set up without data instead; the
+        # sensors stay unavailable until the next regular update. Anything
+        # else (no network, a server error) keeps the quick setup retry.
+        if not isinstance(coordinator.last_exception, WaitForSolariance):
+            raise
+        LOGGER.warning("%s: %s The sensors stay unavailable until the next update.",
+                       entry.title, coordinator.last_exception)
     entry.runtime_data = coordinator
 
     @callback

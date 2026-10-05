@@ -39,6 +39,19 @@ async def test_one_system_is_set_up_without_a_choice(hass, aioclient_mock):
     assert headers["Authorization"] == f"Bearer {TOKEN}"
 
 
+async def test_a_token_pasted_with_bearer_is_stored_without_it(hass, aioclient_mock):
+    """The website's REST guide puts "Bearer <token>" into secrets.yaml; a
+    token copied from there must not go out as "Bearer Bearer ..."."""
+    aioclient_mock.get(LIST_URL, json=envelope({"systems": SYSTEMS[:1]}))
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_TOKEN: f"Bearer {TOKEN}"})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_API_TOKEN] == TOKEN
+    _method, _url, _data, headers = aioclient_mock.mock_calls[0]
+    assert headers["Authorization"] == f"Bearer {TOKEN}"
+
+
 async def test_several_systems_offer_a_choice(hass, aioclient_mock):
     aioclient_mock.get(LIST_URL, json=envelope({"systems": SYSTEMS}))
     result = await _start(hass)
