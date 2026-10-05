@@ -51,14 +51,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -
 
     entry.async_on_unload(
         async_track_time_change(hass, _recompute, minute=(0, 15, 30, 45), second=5))
-    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
-
-
-async def _async_options_updated(hass: HomeAssistant, entry: SolarianceConfigEntry) -> None:
-    """A new polling interval takes effect by reloading the entry."""
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -> bool:

@@ -128,6 +128,21 @@ async def test_reauth_stores_the_new_token(hass, aioclient_mock, config_entry):
     assert config_entry.data[CONF_API_TOKEN] == "new-token"
 
 
+async def test_reauth_of_a_loaded_entry_reloads_without_a_deprecation(
+        hass, aioclient_mock, setup_entry, caplog):
+    """Home Assistant reloads the entry after re-authentication itself; with
+    an update listener registered it logs that this breaks in 2026.12."""
+    aioclient_mock.get(LIST_URL, json=envelope({"systems": SYSTEMS}))
+    result = await setup_entry.start_reauth_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_TOKEN: "new-token"})
+    assert result["reason"] == "reauth_successful"
+    await hass.async_block_till_done()
+    assert setup_entry.state is config_entries.ConfigEntryState.LOADED
+    assert setup_entry.data[CONF_API_TOKEN] == "new-token"
+    assert "update listener" not in caplog.text
+
+
 async def test_reauth_refuses_a_token_of_another_account(hass, aioclient_mock, config_entry):
     config_entry.add_to_hass(hass)
     aioclient_mock.get(LIST_URL, json=envelope({"systems": SYSTEMS[1:]}))

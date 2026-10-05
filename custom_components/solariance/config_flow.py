@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlowWithReload
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
@@ -144,8 +144,11 @@ class SolarianceConfigFlow(ConfigFlow, domain=DOMAIN):
         return SolarianceOptionsFlow()
 
 
-class SolarianceOptionsFlow(OptionsFlow):
-    """How often the forecast is fetched."""
+class SolarianceOptionsFlow(OptionsFlowWithReload):
+    """How often the forecast is fetched. A changed interval takes effect
+    through Home Assistant's own reload after the flow; an update listener
+    doing the same is deprecated (it breaks in Home Assistant 2026.12) and
+    made re-authentication log a warning."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
