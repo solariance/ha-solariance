@@ -23,7 +23,7 @@ import aiohttp
 from .const import API_BASE
 
 _TIMEOUT = aiohttp.ClientTimeout(total=30)
-_USER_AGENT = "HomeAssistant-Solariance/0.1.0"
+_USER_AGENT = "HomeAssistant-Solariance/0.1.1"
 
 
 class SolarianceError(Exception):
