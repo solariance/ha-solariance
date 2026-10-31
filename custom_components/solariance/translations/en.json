@@ -149,6 +149,12 @@
     },
     "entry_not_loaded": {
       "message": "{name} has no forecast loaded right now."
+    },
+    "system_not_in_account": {
+      "message": "This system is no longer in the Solariance account the API token belongs to (deleted, or the token is another account's). Remove this entry, or add the system again with a token of the account that has it; it is checked again hourly."
+    },
+    "refused": {
+      "message": "Solariance refused the request ({reason}). The token is fine; it is asked again hourly."
     }
   },
   "services": {
@@ -203,6 +209,12 @@
           "description": "Optional: subtracted from the price for the saving."
         }
       }
+    }
+  },
+  "issues": {
+    "system_not_in_account": {
+      "title": "{title}: system no longer in the account",
+      "description": "Solariance says the system of \"{title}\" is not in the account the API token belongs to: it was deleted at solariance.de, or the token is another account's. A new token for the same account will not bring it back. Remove this entry, or add the system again with a token of the account that has it. Home Assistant checks again hourly and closes this issue when the system answers."
     }
   }
 }

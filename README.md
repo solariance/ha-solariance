@@ -124,6 +124,13 @@ as long as the API asks, and the sensors show *unavailable* meanwhile.
 - **"Solariance has paused this system"**: the account has more systems, or a larger one, than its
   plan covers. The token is fine; change the plan or remove a system at solariance.de. The
   integration checks again every hour.
+- **"System no longer in the account"** (a repair issue): Solariance says the system was deleted, or the
+  token belongs to another account. A new token for the same account will not bring it back: remove
+  the entry, or add the system again with a token of the account that has it. The issue closes on
+  its own once the system answers again.
+- **"Solariance refused the request"**: the account refused this request (for example, an e-mail
+  address not confirmed yet). The token is fine and no new one is asked for; the integration asks
+  again every hour.
 - **Diagnostics**: the integration's ⋮ menu → Download diagnostics (the token is removed).
 
 ## Removal

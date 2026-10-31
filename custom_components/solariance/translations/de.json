@@ -149,6 +149,12 @@
     },
     "entry_not_loaded": {
       "message": "Für {name} ist gerade keine Prognose geladen."
+    },
+    "system_not_in_account": {
+      "message": "Diese Anlage gehört nicht mehr zu dem Solariance-Konto, zu dem der API-Token gehört (gelöscht, oder der Token gehört zu einem anderen Konto). Entfernen Sie diesen Eintrag oder fügen Sie die Anlage mit einem Token des Kontos, das sie hat, neu hinzu; sie wird stündlich erneut geprüft."
+    },
+    "refused": {
+      "message": "Solariance hat die Anfrage abgelehnt ({reason}). Der Token ist in Ordnung; es wird stündlich erneut gefragt."
     }
   },
   "services": {
@@ -203,6 +209,12 @@
           "description": "Optional: wird für die Ersparnis vom Preis abgezogen."
         }
       }
+    }
+  },
+  "issues": {
+    "system_not_in_account": {
+      "title": "{title}: Anlage nicht mehr im Konto",
+      "description": "Laut Solariance gehört die Anlage von „{title}“ nicht zu dem Konto, zu dem der API-Token gehört: Sie wurde auf solariance.de gelöscht, oder der Token gehört zu einem anderen Konto. Ein neuer Token desselben Kontos holt sie nicht zurück. Entfernen Sie diesen Eintrag oder fügen Sie die Anlage mit einem Token des Kontos, das sie hat, neu hinzu. Home Assistant prüft stündlich erneut und schließt diesen Hinweis, sobald die Anlage antwortet."
     }
   }
 }

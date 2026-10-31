@@ -23,6 +23,7 @@ from .api import (
     SolarianceAuthError,
     SolarianceError,
     SolarianceRateLimitError,
+    SolarianceRefusedError,
     normalise_token,
 )
 from .const import (
@@ -74,6 +75,10 @@ class SolarianceConfigFlow(ConfigFlow, domain=DOMAIN):
             return [], {"base": "invalid_auth"}
         except SolarianceRateLimitError:
             return [], {"base": "rate_limited"}
+        except SolarianceRefusedError:
+            # A token this account cannot use here: for the form, a token
+            # that does not work.
+            return [], {"base": "invalid_auth"}
         except SolarianceError:
             return [], {"base": "cannot_connect"}
         except Exception:  # noqa: BLE001 -- the form must answer, whatever happened

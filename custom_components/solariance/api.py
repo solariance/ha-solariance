@@ -10,9 +10,16 @@ as a session token and answers 401. A read-only token is enough.
 
 ANSWERS. Every answer is the envelope {"code", "message", "data"}. GET
 forecast/power answers 204 while the system has no forecast yet (a new system,
-or the first model run of the day not computed), which is not an error. A 403
-with data.reason "system_locked" means the account's plan has paused the
-system (too many systems, or too large for the plan); the token is fine then.
+or the first model run of the day not computed), which is not an error.
+
+REFUSALS. Only a 401 says the token is no good. A 403 is the account or the
+plan refusing this request, and a new token would be refused the same, so it
+never starts a re-authentication (until 0.1.1 every unexplained 403 did, and
+Home Assistant stopped polling until someone entered a token that could not
+help). data.reason names it: "system_locked" -- the plan has paused the
+system; "not_owner" -- the system is not in the token's account any more;
+anything else is a refusal the integration reports and asks about again
+later.
 """
 from __future__ import annotations
 
@@ -23,7 +30,7 @@ import aiohttp
 from .const import API_BASE
 
 _TIMEOUT = aiohttp.ClientTimeout(total=30)
-_USER_AGENT = "HomeAssistant-Solariance/0.1.1"
+_USER_AGENT = "HomeAssistant-Solariance/0.1.2"
 
 
 class SolarianceError(Exception):
@@ -36,6 +43,20 @@ class SolarianceAuthError(SolarianceError):
 
 class SolarianceConnectionError(SolarianceError):
     """The API could not be reached or answered with a server error."""
+
+
+class SolarianceRefusedError(SolarianceError):
+    """A 403: the account or its plan refuses this request. Not the token's
+    fault -- a new one would be refused the same."""
+
+    def __init__(self, reason: str | None) -> None:
+        super().__init__(f"refused ({reason or 'no reason given'})")
+        self.reason = reason
+
+
+class SolarianceSystemGoneError(SolarianceRefusedError):
+    """403 "not_owner": the system is not in the token's account any more --
+    deleted, or the token belongs to another account."""
 
 
 class SolarianceSystemPausedError(SolarianceError):
@@ -75,10 +96,10 @@ class SolarianceApiClient:
                                          headers=headers, timeout=_TIMEOUT) as resp:
                 if resp.status == 204:
                     return None
-                if resp.status == 403 and (paused := await _paused(resp)) is not None:
-                    raise SolarianceSystemPausedError(paused or None)
-                if resp.status in (401, 403):
-                    raise SolarianceAuthError(f"{path}: HTTP {resp.status}")
+                if resp.status == 401:
+                    raise SolarianceAuthError(f"{path}: HTTP 401")
+                if resp.status == 403:
+                    raise await _refusal(resp)
                 if resp.status == 429:
                     raise SolarianceRateLimitError(_retry_after(resp.headers.get("Retry-After")))
                 if resp.status >= 400:
@@ -120,17 +141,21 @@ def normalise_token(token: str) -> str:
     return token
 
 
-async def _paused(resp: aiohttp.ClientResponse) -> str | None:
-    """For a 403: the plan's lock reason ("" when none is given) if the system
-    is paused, None for any other refusal."""
+async def _refusal(resp: aiohttp.ClientResponse) -> SolarianceError:
+    """What a 403 says, as the error to raise: a paused system, a system
+    gone from the account, or any other refusal (with its reason, when the
+    body names one)."""
     try:
         body = await resp.json(content_type=None)
     except (aiohttp.ContentTypeError, ValueError):
-        return None
+        body = None
     data = body.get("data") if isinstance(body, dict) else None
-    if isinstance(data, dict) and data.get("reason") == "system_locked":
-        return str(data.get("locked_reason") or "")
-    return None
+    reason = data.get("reason") if isinstance(data, dict) else None
+    if reason == "system_locked":
+        return SolarianceSystemPausedError(str(data.get("locked_reason") or "") or None)
+    if reason == "not_owner":
+        return SolarianceSystemGoneError(reason)
+    return SolarianceRefusedError(reason if isinstance(reason, str) else None)
 
 
 def _retry_after(value: str | None) -> float | None:

@@ -129,3 +129,72 @@ async def test_rate_limit_marks_entities_unavailable_until_it_recovers(
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
     assert hass.states.get(entity).state != "unavailable"
+
+
+# Only a 401 says the token is no good (0.1.2). Until 0.1.1 every unexplained
+# 403 started a re-authentication, and Home Assistant stopped polling until
+# someone entered a token that could not help.
+NOT_OWNER = {"code": 403, "message": "Access denied", "data": {"reason": "not_owner"}}
+UNVERIFIED = {"code": 403, "message": "Please verify your email address to use this feature.",
+              "data": {"reason": "email_not_verified"}}
+
+
+def _gone_issue(hass, config_entry):
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.solariance.const import DOMAIN
+    return ir.async_get(hass).async_get_issue(
+        DOMAIN, f"system_not_in_account_{config_entry.entry_id}")
+
+
+async def test_a_system_gone_from_the_account_is_an_issue_not_a_reauth(
+        hass, freezer, aioclient_mock, config_entry):
+    await _setup_answering(hass, freezer, aioclient_mock, config_entry,
+                           status=403, json=NOT_OWNER)
+    assert config_entry.state is ConfigEntryState.LOADED
+    assert hass.states.get(ENTITY).state == "unavailable"
+    assert hass.config_entries.flow.async_progress() == []
+    issue = _gone_issue(hass, config_entry)
+    assert issue is not None
+    assert issue.translation_key == "system_not_in_account"
+    assert issue.translation_placeholders == {"title": config_entry.title}
+
+    # Home Assistant ignores a wait on the setup refresh, so the regular
+    # update asks once more; from then on it is hourly, not every 30 minutes.
+    await _fire(hass, freezer, timedelta(minutes=31))
+    calls = aioclient_mock.call_count
+    assert calls == 2
+    assert hass.config_entries.flow.async_progress() == []
+    await _fire(hass, freezer, timedelta(minutes=45))
+    assert aioclient_mock.call_count == calls
+
+    # ... and the issue closes once the system answers again.
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(FORECAST_URL, json=envelope(make_payload()))
+    await _fire(hass, freezer, timedelta(minutes=20))
+    assert hass.states.get(ENTITY).state != "unavailable"
+    assert _gone_issue(hass, config_entry) is None
+
+
+async def test_removing_the_entry_removes_its_issue(
+        hass, freezer, aioclient_mock, config_entry):
+    await _setup_answering(hass, freezer, aioclient_mock, config_entry,
+                           status=403, json=NOT_OWNER)
+    assert _gone_issue(hass, config_entry) is not None
+    assert await hass.config_entries.async_remove(config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert _gone_issue(hass, config_entry) is None
+
+
+async def test_any_other_refusal_waits_without_reauth(
+        hass, freezer, setup_entry, aioclient_mock):
+    for answer in ({"json": UNVERIFIED}, {"json": {"code": 403, "message": "nope"}}, {}):
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(FORECAST_URL, status=403, **answer)
+        await _fire(hass, freezer, timedelta(minutes=61))
+        assert hass.states.get(ENTITY).state == "unavailable"
+        assert hass.config_entries.flow.async_progress() == []
+        calls = aioclient_mock.call_count
+        await _fire(hass, freezer, timedelta(minutes=45))  # less than the hour it waits
+        assert aioclient_mock.call_count == calls
+    assert _gone_issue(hass, setup_entry) is None

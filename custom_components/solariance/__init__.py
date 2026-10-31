@@ -7,11 +7,17 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, LOGGER
-from .coordinator import SolarianceConfigEntry, SolarianceCoordinator, WaitForSolariance
+from .coordinator import (
+    SolarianceConfigEntry,
+    SolarianceCoordinator,
+    WaitForSolariance,
+    system_gone_issue_id,
+)
 from .services import async_setup_services
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -31,7 +37,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -
     try:
         await coordinator.async_config_entry_first_refresh()
     except ConfigEntryNotReady:
-        # A spent hourly limit, no forecast yet or a paused system: retrying
+        # A spent hourly limit, no forecast yet, a paused system or another
+        # refusal (a system gone from the account, ...): retrying
         # setup on Home Assistant's own schedule (5, 10, 20 s ... then every
         # 10 min) would add refused calls to the limit the Solariance app
         # shares, and refused calls count. Set up without data instead; the
@@ -58,3 +65,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -
 async def async_unload_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -> None:
+    """A removed entry's repair issue goes with it."""
+    ir.async_delete_issue(hass, DOMAIN, system_gone_issue_id(entry.entry_id))
