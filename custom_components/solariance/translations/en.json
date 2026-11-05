@@ -215,6 +215,18 @@
     "system_not_in_account": {
       "title": "{title}: system no longer in the account",
       "description": "Solariance says the system of \"{title}\" is not in the account the API token belongs to: it was deleted at solariance.de, or the token is another account's. A new token for the same account will not bring it back. Remove this entry, or add the system again with a token of the account that has it. Home Assistant checks again hourly and closes this issue when the system answers."
+    },
+    "system_paused": {
+      "title": "Solariance system paused",
+      "description": "“{name}” is paused. Its sensors stay unavailable until the system is active again in your Solariance account."
+    },
+    "system_paused_kwp_limit": {
+      "title": "Solariance system paused",
+      "description": "“{name}” is paused: the system is larger than your account currently includes. Its sensors stay unavailable until the system is active again in your Solariance account."
+    },
+    "system_paused_system_limit": {
+      "title": "Solariance system paused",
+      "description": "“{name}” is paused: your account currently includes fewer systems than you have set up. Its sensors stay unavailable until the system is active again in your Solariance account."
     }
   }
 }

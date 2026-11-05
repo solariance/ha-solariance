@@ -12,6 +12,13 @@ ANSWERS. Every answer is the envelope {"code", "message", "data"}. GET
 forecast/power answers 204 while the system has no forecast yet (a new system,
 or the first model run of the day not computed), which is not an error.
 
+FORECAST STATUS (API 2026-11, read since 0.1.3; every part optional, an older
+API sends none of it). The 204 carries `X-Solariance-Forecast-Status` (queued,
+delayed, failed, stale), `Retry-After` (seconds until asking again makes sense)
+and `X-Solariance-Forecast-Eta` (ISO UTC, when the forecast is expected). The
+200 carries the status header too (provisional, ready), and its body
+`generated_utc` and `forecast_status`.
+
 REFUSALS. Only a 401 says the token is no good. A 403 is the account or the
 plan refusing this request, and a new token would be refused the same, so it
 never starts a re-authentication (until 0.1.1 every unexplained 403 did, and
@@ -23,14 +30,21 @@ later.
 """
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 import aiohttp
 
 from .const import API_BASE
+from .forecast import parse_status, parse_utc
 
 _TIMEOUT = aiohttp.ClientTimeout(total=30)
 _USER_AGENT = "HomeAssistant-Solariance/0.1.2"
+STATUS_HEADER = "X-Solariance-Forecast-Status"
+ETA_HEADER = "X-Solariance-Forecast-Eta"
 
 
 class SolarianceError(Exception):
@@ -75,6 +89,17 @@ class SolarianceRateLimitError(SolarianceError):
         self.retry_after = retry_after
 
 
+@dataclass(frozen=True)
+class ForecastAnswer:
+    """GET forecast/power: the forecast, or (data None) why there is none yet.
+    The status fields stay None when the API does not send them."""
+
+    data: dict[str, Any] | None
+    status: str | None = None          # X-Solariance-Forecast-Status
+    retry_after: float | None = None   # Retry-After of a 204, seconds
+    eta: datetime | None = None        # X-Solariance-Forecast-Eta of a 204, UTC
+
+
 class SolarianceApiClient:
     """One account's access to the API."""
 
@@ -86,6 +111,12 @@ class SolarianceApiClient:
 
     async def _get(self, path: str, params: dict[str, str] | None = None) -> Any:
         """The `data` of a GET, or None for a 204."""
+        data, _headers = await self._fetch(path, params)
+        return data
+
+    async def _fetch(self, path: str,
+                     params: dict[str, str] | None = None) -> tuple[Any, Mapping[str, str]]:
+        """The `data` of a GET (None for a 204) and the answer's headers."""
         headers = {
             "Authorization": f"Bearer {self._token}",
             "Accept": "application/json",
@@ -94,8 +125,9 @@ class SolarianceApiClient:
         try:
             async with self._session.get(f"{self._base}/{path}", params=params,
                                          headers=headers, timeout=_TIMEOUT) as resp:
+                answer_headers = resp.headers.copy()
                 if resp.status == 204:
-                    return None
+                    return None, answer_headers
                 if resp.status == 401:
                     raise SolarianceAuthError(f"{path}: HTTP 401")
                 if resp.status == 403:
@@ -112,7 +144,7 @@ class SolarianceApiClient:
             raise SolarianceConnectionError(f"{path}: {err}") from err
         if not isinstance(body, dict):
             raise SolarianceConnectionError(f"{path}: unexpected answer")
-        return body.get("data")
+        return body.get("data"), answer_headers
 
     async def async_list_systems(self) -> list[dict[str, Any]]:
         """The account's systems: system_id, name, city, country, kWp, ..."""
@@ -120,15 +152,21 @@ class SolarianceApiClient:
         systems = (data or {}).get("systems") if isinstance(data, dict) else None
         return [s for s in systems or [] if isinstance(s, dict) and s.get("system_id")]
 
-    async def async_get_power_forecast(self, system_id: str) -> dict[str, Any] | None:
-        """The power forecast of one system for every day its plan covers,
-        or None while none is computed yet.
+    async def async_get_power_forecast(self, system_id: str) -> ForecastAnswer:
+        """The power forecast of one system for every day its plan covers
+        (data None while none is computed yet), with what the API says about
+        its status.
 
         No `day` parameter on purpose: asking for days 0 and 1 by number turns
         the whole answer into a 204 when one of them is not computed yet.
         """
-        data = await self._get("forecast/power", {"system_id": system_id})
-        return data if isinstance(data, dict) else None
+        data, headers = await self._fetch("forecast/power", {"system_id": system_id})
+        status = parse_status(headers.get(STATUS_HEADER))
+        if isinstance(data, dict):
+            return ForecastAnswer(data=data, status=status)
+        return ForecastAnswer(data=None, status=status,
+                              retry_after=_retry_after(headers.get("Retry-After")),
+                              eta=parse_utc(headers.get(ETA_HEADER)))
 
 
 def normalise_token(token: str) -> str:
@@ -159,7 +197,10 @@ async def _refusal(resp: aiohttp.ClientResponse) -> SolarianceError:
 
 
 def _retry_after(value: str | None) -> float | None:
+    """Retry-After in seconds; None when absent or not a finite number (an
+    HTTP date, "nan", ...)."""
     try:
-        return max(float(value), 0.0) if value is not None else None
+        seconds = float(value) if value is not None else None
     except ValueError:
         return None
+    return max(seconds, 0.0) if seconds is not None and math.isfinite(seconds) else None

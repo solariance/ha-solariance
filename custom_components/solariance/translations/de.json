@@ -215,6 +215,18 @@
     "system_not_in_account": {
       "title": "{title}: Anlage nicht mehr im Konto",
       "description": "Laut Solariance gehört die Anlage von „{title}“ nicht zu dem Konto, zu dem der API-Token gehört: Sie wurde auf solariance.de gelöscht, oder der Token gehört zu einem anderen Konto. Ein neuer Token desselben Kontos holt sie nicht zurück. Entfernen Sie diesen Eintrag oder fügen Sie die Anlage mit einem Token des Kontos, das sie hat, neu hinzu. Home Assistant prüft stündlich erneut und schließt diesen Hinweis, sobald die Anlage antwortet."
+    },
+    "system_paused": {
+      "title": "Solariance-Anlage pausiert",
+      "description": "„{name}“ ist pausiert. Die Sensoren bleiben nicht verfügbar, bis die Anlage in Ihrem Solariance-Konto wieder aktiv ist."
+    },
+    "system_paused_kwp_limit": {
+      "title": "Solariance-Anlage pausiert",
+      "description": "„{name}“ ist pausiert: Die Anlage ist größer, als Ihr Konto derzeit umfasst. Die Sensoren bleiben nicht verfügbar, bis die Anlage in Ihrem Solariance-Konto wieder aktiv ist."
+    },
+    "system_paused_system_limit": {
+      "title": "Solariance-Anlage pausiert",
+      "description": "„{name}“ ist pausiert: Ihr Konto umfasst derzeit weniger Anlagen, als Sie angelegt haben. Die Sensoren bleiben nicht verfügbar, bis die Anlage in Ihrem Solariance-Konto wieder aktiv ist."
     }
   }
 }

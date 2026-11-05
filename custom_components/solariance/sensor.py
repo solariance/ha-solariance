@@ -38,6 +38,9 @@ class SolarianceSensorEntityDescription(SensorEntityDescription):
     # free plan does not); otherwise the entity is unavailable, not 0.
     available_fn: Callable[[SolarForecast, datetime], bool] = lambda forecast, now: True
     attributes_fn: Callable[[SolarForecast, datetime], dict[str, Any]] | None = None
+    # Whether the sensor carries `forecast_status` and `generated_utc` (the
+    # main power and energy sensors), when the API sends them.
+    status_attributes: bool = False
 
 
 def _round(value: float | None, digits: int) -> float | None:
@@ -75,6 +78,18 @@ def _hourly(offset: int) -> Callable[[SolarForecast, datetime], dict[str, Any]]:
              "power_w": round(weighted / seconds) if seconds else 0}
             for key, (energy, weighted, seconds) in sorted(hours.items())
         ]}
+    return attributes
+
+
+def _status_attributes(forecast: SolarForecast) -> dict[str, Any]:
+    """How final the forecast is and when it was computed, as far as the API
+    says: "provisional" while the first forecast still uses a nearby point's
+    weather, then "ready"."""
+    attributes: dict[str, Any] = {}
+    if forecast.forecast_status is not None:
+        attributes["forecast_status"] = forecast.forecast_status
+    if forecast.generated_utc is not None:
+        attributes["generated_utc"] = forecast.generated_utc
     return attributes
 
 
@@ -136,7 +151,7 @@ SENSORS: tuple[SolarianceSensorEntityDescription, ...] = (
     SolarianceSensorEntityDescription(
         key="energy_production_today", translation_key="energy_production_today",
         value_fn=_day_energy(0), available_fn=_has_day(0), attributes_fn=_hourly(0),
-        **_ENERGY),
+        status_attributes=True, **_ENERGY),
     SolarianceSensorEntityDescription(
         key="energy_production_today_remaining",
         translation_key="energy_production_today_remaining",
@@ -148,7 +163,7 @@ SENSORS: tuple[SolarianceSensorEntityDescription, ...] = (
         **_ENERGY),
     SolarianceSensorEntityDescription(
         key="power_production_now", translation_key="power_production_now",
-        value_fn=_power_in(timedelta(0)), **_POWER),
+        value_fn=_power_in(timedelta(0)), status_attributes=True, **_POWER),
     SolarianceSensorEntityDescription(
         key="power_production_next_hour", translation_key="power_production_next_hour",
         value_fn=_power_in(timedelta(hours=1)), **_POWER),
@@ -239,8 +254,11 @@ class SolarianceSensor(CoordinatorEntity[SolarianceCoordinator], SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        fn = self.entity_description.attributes_fn
         data = self.coordinator.data
-        if fn is None or data is None:
+        if data is None:
             return None
-        return fn(data, dt_util.utcnow())
+        description = self.entity_description
+        attributes = _status_attributes(data) if description.status_attributes else {}
+        if description.attributes_fn is not None:
+            attributes.update(description.attributes_fn(data, dt_util.utcnow()))
+        return attributes or None
