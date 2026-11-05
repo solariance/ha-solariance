@@ -44,6 +44,11 @@ each further system. Each system becomes one device.
 Names follow the core Forecast.Solar integration, so existing dashboards port over with a rename.
 "Now" values are recomputed every quarter hour from the stored forecast, without extra API calls.
 
+*Estimated energy production – today* and *Estimated power production – now* also carry
+`forecast_status` (`provisional` while a new system's first forecast still uses the weather of a
+nearby point, then `ready`) and `generated_utc` (when Solariance computed the forecast), whenever
+Solariance sends them.
+
 ## Energy dashboard
 
 Settings → Dashboards → Energy → Solar panels → *Solar production forecast* → choose your Solariance system.
@@ -117,13 +122,17 @@ as long as the API asks, and the sensors show *unavailable* meanwhile.
 
 ## Troubleshooting
 
-- **"Solariance has not computed a forecast for this system yet"**: a new system gets its first forecast
-  with the next model run; Home Assistant retries on its own.
+- **"Solariance has not computed a forecast for this system yet"**: a new system usually gets its first
+  forecast within a minute. When Solariance says when to ask again, the integration checks back then
+  (after 1 to 30 minutes, longer each time while the wait goes on) instead of waiting the full
+  interval, and logs one line with the status (`queued`, `delayed`, `failed`, `stale`) and the
+  expected time; otherwise it retries at the next update.
 - **Re-authentication requested**: the token was revoked or expired. Create a new one and paste it in
   the repair dialog.
-- **"Solariance has paused this system"**: the account has more systems, or a larger one, than its
-  plan covers. The token is fine; change the plan or remove a system at solariance.de. The
-  integration checks again every hour.
+- **"Solariance has paused this system"** (also shown under Settings → Repairs as *Solariance system
+  paused*): the account has more systems, or a larger one, than its plan covers. The token is fine;
+  change the plan or remove a system at solariance.de. The integration checks again every hour, and
+  the notice closes on its own once the system is active again.
 - **"System no longer in the account"** (a repair issue): Solariance says the system was deleted, or the
   token belongs to another account. A new token for the same account will not bring it back: remove
   the entry, or add the system again with a token of the account that has it. The issue closes on

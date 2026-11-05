@@ -7,7 +7,6 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 
@@ -16,7 +15,7 @@ from .coordinator import (
     SolarianceConfigEntry,
     SolarianceCoordinator,
     WaitForSolariance,
-    system_gone_issue_id,
+    async_delete_entry_issues,
 )
 from .services import async_setup_services
 
@@ -63,10 +62,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -> bool:
-    """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    """Unload a config entry. The paused notice goes with it (a reload sets
+    it again if the system is still paused); the system-gone issue stays
+    until the system answers or the entry is removed."""
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        async_delete_entry_issues(hass, entry.entry_id, gone=False)
+    return unloaded
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -> None:
-    """A removed entry's repair issue goes with it."""
-    ir.async_delete_issue(hass, DOMAIN, system_gone_issue_id(entry.entry_id))
+    """A removed entry's repair issues go with it."""
+    async_delete_entry_issues(hass, entry.entry_id)

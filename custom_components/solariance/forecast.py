@@ -20,10 +20,16 @@ missing one need no special case.
 
 "TODAY" is the day whose date is today's date in the SYSTEM's time zone, never
 simply the first list: the API omits a day the model has not computed yet.
+
+STATUS (0.1.3). Next to `forecast`, the answer can carry `generated_utc` (when
+the run that produced it was written, ISO UTC) and `forecast_status`
+("provisional" while the first forecast still uses a nearby point's weather,
+then "ready"). Both are optional: an API without them reads as before.
 """
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -84,6 +90,10 @@ class SolarForecast:
     system_id: str
     time_zone: ZoneInfo
     days: tuple[Day, ...]
+    # When the forecast was computed and how final it is; None when the API
+    # does not say (before the 2026-11 API).
+    generated_utc: datetime | None = None
+    forecast_status: str | None = None
 
     def local_date(self, moment: datetime) -> date:
         return moment.astimezone(self.time_zone).date()
@@ -134,6 +144,30 @@ class SolarForecast:
 
 class ForecastFormatError(ValueError):
     """The API answered 200 with a body this integration cannot read."""
+
+
+_STATUS = re.compile(r"[a-z_]{1,32}")
+
+
+def parse_status(value) -> str | None:
+    """A forecast status ("queued", "provisional", ...) as the API names it,
+    or None when there is none or it is not a plain status word."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip().lower()
+    return value if _STATUS.fullmatch(value) else None
+
+
+def parse_utc(value) -> datetime | None:
+    """An ISO time ("2026-11-04T07:59:05Z") as an aware UTC datetime; a time
+    without an offset is UTC. None when there is none or it does not parse:
+    a status field never makes the forecast unreadable."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return _naive_utc(value.strip())
+    except (ValueError, OverflowError):
+        return None
 
 
 def _naive_utc(text: str) -> datetime:
@@ -190,7 +224,9 @@ def parse_power_forecast(data: dict) -> SolarForecast:
         days.append(Day(date=day, intervals=tuple(intervals)))
     days.sort(key=lambda d: d.date)
     return SolarForecast(system_id=str(data.get("system_id") or ""), time_zone=zone,
-                         days=tuple(days))
+                         days=tuple(days),
+                         generated_utc=parse_utc(data.get("generated_utc")),
+                         forecast_status=parse_status(data.get("forecast_status")))
 
 
 @dataclass(frozen=True)
