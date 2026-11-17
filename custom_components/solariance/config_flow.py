@@ -5,10 +5,13 @@ from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlowWithReload
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -30,6 +33,7 @@ from .const import (
     CONF_API_TOKEN,
     CONF_SCAN_INTERVAL,
     CONF_SYSTEM_ID,
+    CONF_UPLOAD_SENSOR,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     LOGGER,
@@ -150,21 +154,30 @@ class SolarianceConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class SolarianceOptionsFlow(OptionsFlowWithReload):
-    """How often the forecast is fetched. A changed interval takes effect
-    through Home Assistant's own reload after the flow; an update listener
-    doing the same is deprecated (it breaks in Home Assistant 2026.12) and
-    made re-authentication log a warning."""
+    """How often the forecast is fetched, and (0.2) the energy sensor whose
+    production is uploaded every hour -- none by default. A change takes
+    effect through Home Assistant's own reload after the flow; an update
+    listener doing the same is deprecated (it breaks in Home Assistant
+    2026.12) and made re-authentication log a warning."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(
-                data={CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL])})
+            data: dict[str, Any] = {CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL])}
+            if user_input.get(CONF_UPLOAD_SENSOR):
+                data[CONF_UPLOAD_SENSOR] = user_input[CONF_UPLOAD_SENSOR]
+            return self.async_create_entry(data=data)
         current = int(self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
+        sensor = self.config_entry.options.get(CONF_UPLOAD_SENSOR)
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({vol.Required(CONF_SCAN_INTERVAL, default=str(current)):
-                SelectSelector(SelectSelectorConfig(
-                    options=[str(m) for m in SCAN_INTERVALS],
-                    mode=SelectSelectorMode.DROPDOWN,
-                    translation_key=CONF_SCAN_INTERVAL))}),
+            data_schema=vol.Schema({
+                vol.Required(CONF_SCAN_INTERVAL, default=str(current)):
+                    SelectSelector(SelectSelectorConfig(
+                        options=[str(m) for m in SCAN_INTERVALS],
+                        mode=SelectSelectorMode.DROPDOWN,
+                        translation_key=CONF_SCAN_INTERVAL)),
+                vol.Optional(CONF_UPLOAD_SENSOR, description={"suggested_value": sensor}):
+                    EntitySelector(EntitySelectorConfig(domain="sensor",
+                                                        device_class=SensorDeviceClass.ENERGY)),
+            }),
         )

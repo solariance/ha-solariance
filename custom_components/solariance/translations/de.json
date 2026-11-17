@@ -44,10 +44,12 @@
       "init": {
         "title": "Solariance-Optionen",
         "data": {
-          "scan_interval": "Prognose aktualisieren alle"
+          "scan_interval": "Prognose aktualisieren alle",
+          "upload_sensor": "Erzeugung dieses Sensors hochladen (optional)"
         },
         "data_description": {
-          "scan_interval": "Die Prognose ändert sich mit jedem Lauf des Wettermodells, einige Male am Tag. Free- und Plus-Konten teilen sich 30 Prognoseabfragen pro Stunde mit der Solariance-App."
+          "scan_interval": "Die Prognose ändert sich mit jedem Lauf des Wettermodells, einige Male am Tag. Free- und Plus-Konten teilen sich 30 Prognoseabfragen pro Stunde mit der Solariance-App.",
+          "upload_sensor": "Ihr Energiesensor der PV-Erzeugung (kWh, steigend). Jede Stunde gehen die letzten 48 Stundenwerte an Solariance, um Ihre Prognose zu kalibrieren. Solariance füllt nur Stunden, die es noch nicht hat, und ersetzt nie, was Sie selbst hochgeladen haben. Benötigt einen API-Token mit dem Bereich Upload (oder ReadWrite) und die Einwilligung für Messdaten in Ihrem Solariance-Konto."
         }
       }
     }

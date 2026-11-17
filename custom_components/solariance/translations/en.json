@@ -44,10 +44,12 @@
       "init": {
         "title": "Solariance options",
         "data": {
-          "scan_interval": "Update the forecast every"
+          "scan_interval": "Update the forecast every",
+          "upload_sensor": "Upload the production of this sensor (optional)"
         },
         "data_description": {
-          "scan_interval": "The forecast changes with each weather model run, a few times a day. Free and Plus accounts share 30 forecast requests per hour with the Solariance app."
+          "scan_interval": "The forecast changes with each weather model run, a few times a day. Free and Plus accounts share 30 forecast requests per hour with the Solariance app.",
+          "upload_sensor": "Your PV production energy sensor (kWh, total increasing). Every hour the last 48 hourly values go to Solariance to calibrate your forecast. Solariance only fills hours it does not have, so it never replaces what you uploaded yourself. Needs an API token with the Upload (or ReadWrite) scope and the measured-data opt-in in your Solariance account."
         }
       }
     }

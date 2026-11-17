@@ -30,6 +30,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant,
             if coordinator.update_interval else None,
             "regular_interval_s": coordinator.regular_interval.total_seconds(),
         },
+        # The production upload (0.2): None while no sensor is chosen.
+        "upload": None if coordinator.upload_state is None else coordinator.upload_state.as_dict(),
         # What the last answer said about the forecast (None: it said nothing).
         "forecast_state": {
             "status": state.status,

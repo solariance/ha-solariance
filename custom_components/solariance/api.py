@@ -1,8 +1,10 @@
 """A small async client for the Solariance REST API.
 
-Only what the integration needs: the account's systems (to set it up) and the
-power forecast of one system (to run it). The API is documented at
-https://developer.solariance.de.
+Only what the integration needs: the account's systems (to set it up), the
+power forecast of one system (to run it) and, since 0.2, the upload of the
+measured production (POST measured/production/upload, source "ha_sensor":
+stored fill-only, never replacing what the owner uploaded). The API is
+documented at https://developer.solariance.de.
 
 AUTH. A personal API token, created at solariance.de/user, is sent as
 `Authorization: Bearer <token>`. Without the "Bearer " prefix the API reads it
@@ -89,6 +91,25 @@ class SolarianceRateLimitError(SolarianceError):
         self.retry_after = retry_after
 
 
+class SolarianceRequestError(SolarianceError):
+    """A 4xx other than 401/403/429: the request itself was refused (a bad
+    payload); data.reason names it."""
+
+    def __init__(self, status: int, reason: str | None) -> None:
+        super().__init__(f"HTTP {status} ({reason or 'no reason given'})")
+        self.status = status
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class UploadAnswer:
+    """POST measured/production/upload: what was stored. A re-report of hours
+    already stored stores nothing, which is the normal case."""
+
+    stored: int
+    rejected: int
+
+
 @dataclass(frozen=True)
 class ForecastAnswer:
     """GET forecast/power: the forecast, or (data None) why there is none yet.
@@ -169,6 +190,41 @@ class SolarianceApiClient:
                               eta=parse_utc(headers.get(ETA_HEADER)))
 
 
+    async def async_upload_measured(self, payload: dict[str, Any]) -> UploadAnswer:
+        """Send measured production (the contract's JSON). A read-only token
+        is refused with a 403 that names no reason."""
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": _USER_AGENT,
+        }
+        path = "measured/production/upload"
+        try:
+            async with self._session.post(f"{self._base}/{path}", json=payload, headers=headers,
+                                          timeout=_TIMEOUT) as resp:
+                if resp.status == 401:
+                    raise SolarianceAuthError(f"{path}: HTTP 401")
+                if resp.status == 403:
+                    raise await _refusal(resp)
+                if resp.status == 429:
+                    raise SolarianceRateLimitError(_retry_after(resp.headers.get("Retry-After")))
+                if 400 <= resp.status < 500:
+                    raise SolarianceRequestError(resp.status, await _reason(resp))
+                if resp.status >= 500:
+                    raise SolarianceConnectionError(f"{path}: HTTP {resp.status}")
+                try:
+                    body = await resp.json(content_type=None)
+                except (aiohttp.ContentTypeError, ValueError) as err:
+                    raise SolarianceConnectionError(f"{path}: not JSON") from err
+        except (TimeoutError, aiohttp.ClientError) as err:
+            raise SolarianceConnectionError(f"{path}: {err}") from err
+        data = body.get("data") if isinstance(body, dict) else None
+        totals = data.get("totals") if isinstance(data, dict) else None
+        totals = totals if isinstance(totals, dict) else {}
+        return UploadAnswer(stored=int(totals.get("stored") or 0), rejected=int(totals.get("rejected") or 0))
+
+
 def normalise_token(token: str) -> str:
     """The token as solariance.de/user issued it. Pasted from a secrets.yaml
     line (the website's REST guide) it can carry "Bearer " in front, which
@@ -194,6 +250,16 @@ async def _refusal(resp: aiohttp.ClientResponse) -> SolarianceError:
     if reason == "not_owner":
         return SolarianceSystemGoneError(reason)
     return SolarianceRefusedError(reason if isinstance(reason, str) else None)
+
+
+async def _reason(resp: aiohttp.ClientResponse) -> str | None:
+    try:
+        body = await resp.json(content_type=None)
+    except (aiohttp.ContentTypeError, ValueError):
+        return None
+    data = body.get("data") if isinstance(body, dict) else None
+    reason = data.get("reason") if isinstance(data, dict) else None
+    return reason if isinstance(reason, str) else None
 
 
 def _retry_after(value: str | None) -> float | None:

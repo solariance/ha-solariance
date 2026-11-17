@@ -12,6 +12,7 @@ API_BASE = "https://api.solariance.de/v1"
 CONF_API_TOKEN = "api_token"
 CONF_SYSTEM_ID = "system_id"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_UPLOAD_SENSOR = "upload_sensor"
 
 # Minutes between forecast polls. The forecast changes with each weather model
 # run, a few times a day, so 30 minutes is plenty. The hourly limit of the free
@@ -31,3 +32,14 @@ EXTRA_DAYS = (2, 3, 4)
 
 APP_URL = "https://app.solariance.de"
 TOKEN_URL = "https://www.solariance.de/user/"
+
+# Upload of the PV production (0.2): the chosen energy sensor's hourly
+# statistics (kWh per hour, from the recorder's long-term statistics) are sent
+# to Solariance once an hour, the last UPLOAD_HOURS hours each time, so an hour
+# missed by a restart or a network gap is filled the next time. Solariance
+# stores them FILL-ONLY (source "ha_sensor"): an hour the owner uploaded by
+# hand is never replaced. The upload needs an API token with the Upload (or
+# ReadWrite) scope and the account's measured-data opt-in.
+UPLOAD_HOURS = 48
+UPLOAD_MINUTE = 7
+UPLOAD_SOURCE = "ha_sensor"

@@ -112,6 +112,22 @@ actions:
 
 **`solariance.get_forecast`** returns the forecast per day (hourly or quarter-hourly) as response data.
 
+## Upload your production (optional)
+
+Since 0.2 the integration can send your PV production to Solariance, so the nightly calibration
+learns how your roof differs from the model. Choose your PV energy sensor (kWh, `total_increasing`,
+the one your Energy dashboard uses) under Settings → Devices & services → Solariance → Configure.
+
+- Every hour, at seven past, the last 48 full hours of the sensor's long-term statistics go to
+  Solariance (`POST measured/production/upload`, source `ha_sensor`).
+- Solariance only **fills** hours it does not have yet: an hour you uploaded yourself is never
+  replaced, and re-sending the same hours stores nothing new.
+- It needs an API token with the **Upload** scope (it reads like a read-only token and writes only
+  measured data) or ReadWrite, and the measured-data opt-in in your Solariance account. Until then
+  the upload is refused, the integration says why in its diagnostics and the log (once, not every
+  hour), and the forecast sensors keep working.
+- Leave the field empty to switch the upload off.
+
 ## Plans and limits
 
 The free plan covers today and tomorrow; Plus and above cover five days. Forecast requests are limited
@@ -150,7 +166,9 @@ Delete the integration under Settings → Devices & services, then revoke the to
 ## Privacy
 
 The integration talks only to `api.solariance.de` with your token. The token is stored in Home
-Assistant's configuration; nothing else leaves your Home Assistant.
+Assistant's configuration. Without an upload sensor nothing else leaves your Home Assistant; with
+one, that sensor's hourly energy (kWh per hour, nothing else) goes to Solariance once an hour, for
+your own system's calibration.
 
 This is an integration by Solariance for Home Assistant. It is not affiliated with or endorsed by the
 Open Home Foundation.

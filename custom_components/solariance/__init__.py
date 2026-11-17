@@ -1,6 +1,7 @@
 """The Solariance integration: PV forecasts for your Solariance systems."""
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 
 from homeassistant.const import Platform
@@ -9,8 +10,9 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, LOGGER
+from .const import CONF_SYSTEM_ID, CONF_UPLOAD_SENSOR, DOMAIN, LOGGER, UPLOAD_MINUTE
 from .coordinator import (
     SolarianceConfigEntry,
     SolarianceCoordinator,
@@ -18,6 +20,7 @@ from .coordinator import (
     async_delete_entry_issues,
 )
 from .services import async_setup_services
+from .upload import UploadState, async_upload
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
@@ -57,8 +60,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -
 
     entry.async_on_unload(
         async_track_time_change(hass, _recompute, minute=(0, 15, 30, 45), second=5))
+    _schedule_upload(hass, entry, coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+def _schedule_upload(hass: HomeAssistant, entry: SolarianceConfigEntry,
+                     coordinator: SolarianceCoordinator) -> None:
+    """The production upload (0.2), once an hour at UPLOAD_MINUTE past, when
+    the options name an energy sensor. The second within that minute comes
+    from the entry's id, so many installations do not arrive at once."""
+    sensor = entry.options.get(CONF_UPLOAD_SENSOR)
+    if not sensor:
+        return
+    coordinator.upload_state = UploadState(sensor=sensor)
+    second = int(hashlib.sha256(entry.entry_id.encode()).hexdigest(), 16) % 60
+
+    async def _upload(_now: datetime) -> None:
+        await async_upload(hass, coordinator.client, entry.data[CONF_SYSTEM_ID], sensor,
+                           coordinator.upload_state, dt_util.utcnow())
+
+    entry.async_on_unload(
+        async_track_time_change(hass, _upload, minute=UPLOAD_MINUTE, second=second))
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -> bool:

@@ -1,7 +1,12 @@
 {
   "domain": "solariance",
   "name": "Solariance",
-  "codeowners": ["@solariance"],
+  "after_dependencies": [
+    "recorder"
+  ],
+  "codeowners": [
+    "@solariance"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/solariance/ha-solariance",
