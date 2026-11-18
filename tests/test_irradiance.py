@@ -266,9 +266,38 @@ async def test_nothing_readable_sends_nothing(hass, aioclient_mock, caplog):
     assert "unsupported_unit" in caplog.text
 
 
+def _rejected(reason):
+    """A 200 whose one series Solariance rejected, as irradiance/handler.py answers it."""
+    return {"json": envelope({
+        "dry_run": False, "upload_id": None,
+        "totals": {"series": 1, "values": 2, "stored": 0, "replaced": 0, "kept": 0, "rejected": 2},
+        "series": [{"system_id": SYSTEM_ID, "sensor_id": "ha-0123456789ab-abcdef",
+                    "status": "rejected", "reason": reason, "stored": 0, "replaced": 0, "kept": 0,
+                    "rejected": 2, "rejections": [], "warnings": []}]})}
+
+
 @pytest.mark.parametrize(("answer", "outcome", "reason", "quiet", "level"), [
     ({"status": 503, "json": {"code": 503, "data": {"reason": "irradiance_uploads_off"}}},
      "switched_off", "irradiance_uploads_off", timedelta(hours=6), logging.INFO),
+    # The live API's own bodies (irradiance/handler.py, auth_utils.auth_route).
+    ({"status": 503, "json": {"code": 503, "message": "Irradiance uploads are not open.",
+                              "data": {"reason": "irradiance_uploads_off", "detail": "schema_missing"}}},
+     "switched_off", "irradiance_uploads_off", timedelta(hours=6), logging.INFO),
+    ({"status": 403, "json": {"code": 403, "data": {"reason": "feature_required",
+                                                    "feature": "measured_data"}}},
+     "refused", "feature_required", timedelta(hours=6), logging.INFO),
+    ({"status": 403, "json": {"code": 403, "message": "This token is restricted to ReadOnly accesss",
+                              "data": {}}},
+     "refused", "token_scope", timedelta(hours=6), logging.WARNING),
+    ({"status": 429, "headers": {"Retry-After": "3600"},
+      "json": {"code": 429, "data": {"reason": "daily_value_cap", "retry_after_seconds": 3600}}},
+     "rate_limited", None, timedelta(hours=1), logging.WARNING),
+    # A 200 that stored nothing: the series was rejected.
+    (_rejected("too_many_sensors"), "rejected", "too_many_sensors", timedelta(hours=6),
+     logging.WARNING),
+    (_rejected("unknown_system"), "rejected", "unknown_system", timedelta(hours=6), logging.WARNING),
+    (_rejected("system_locked"), "rejected", "system_locked", timedelta(hours=6), logging.WARNING),
+    (_rejected("nothing_valid"), "rejected", "nothing_valid", timedelta(hours=1), logging.WARNING),
     ({"status": 403, "json": {"code": 403, "data": {"reason": "feature_required",
                                                     "feature": "ai_irradiance"}}},
      "refused", "feature_required", timedelta(hours=6), logging.INFO),

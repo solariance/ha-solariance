@@ -38,8 +38,11 @@ feature_required) -> INFO, next try in 6 hours; no measured-data opt-in, no
 Upload scope, a paused system -> WARNING, 6 hours; 429 -> its Retry-After
 (1 minute to 6 hours, 1 hour without one); 401 or another 4xx -> 1 hour; 409
 sensor_changed -> a repair issue whose fix starts a new id, and no upload
-until then; a server or network error -> the next run. None of it touches the
-forecast sensors or the production upload.
+until then; a server or network error -> the next run. A 200 whose series
+Solariance rejected stored nothing either: a ninth sensor id of the system
+(too_many_sensors), a system gone from the account or paused -> WARNING, 6
+hours; any other reason (no plausible value, ...) -> WARNING, 1 hour. None of
+it touches the forecast sensors or the production upload.
 """
 from __future__ import annotations
 
@@ -118,6 +121,11 @@ RATE_LIMIT_MAX = timedelta(hours=6)
 # Refusals that only Solariance can lift: said at INFO, not as a warning.
 _QUIET = {("switched_off", "irradiance_uploads_off"), ("refused", "feature_required")}
 
+# Reasons of a rejected series (in a 200) that the next run cannot change: the
+# system's eight sensor ids are taken, the system is not the account's, or the
+# plan has paused it. Quiet as long as a refusal; any other reason 1 hour.
+_SERIES_REFUSALS = {"too_many_sensors", "unknown_system", "system_locked"}
+
 _HINTS = {
     "irradiance_uploads_off": "Solariance does not take irradiance uploads yet",
     "feature_required": "irradiance uploads are not part of the Solariance account yet",
@@ -125,7 +133,12 @@ _HINTS = {
     "measured_opt_in_required": "the Solariance account has not opted in to measured data",
     "system_locked": "the system is paused by the account's plan",
     "not_owner": "the system is not in the token's account",
-    "sensor_changed": "Solariance holds values for this sensor id with another position; "
+    "unknown_system": "the system is not in the token's account",
+    "too_many_sensors": "Solariance keeps at most 8 irradiance sensor ids per system and every new "
+                        "position takes one; erase an unused id first (DELETE measured/irradiance)",
+    "nothing_valid": "Solariance found no plausible value in what was sent; check the sensor's "
+                     "unit and the clock",
+    "sensor_changed":"Solariance holds values for this sensor id with another position; "
                       "see Settings > Repairs",
 }
 
@@ -381,7 +394,7 @@ class IrradianceState:
     cadence_minutes: int
     last_run_utc: datetime | None = None
     # ok | nothing | no_statistics | unsupported_unit | switched_off | refused |
-    # rate_limited | auth | request | sensor_changed | failed
+    # rejected | rate_limited | auth | request | sensor_changed | failed
     outcome: str | None = None
     reason: str | None = None
     window_hours: int = 0
@@ -459,12 +472,19 @@ class IrradianceUploader:
             else:
                 answer = await self.client.async_upload_irradiance(
                     payload(self.system_id, config, values))
-                state.outcome, state.values_sent, state.last_ok_utc = "ok", len(values), now
+                state.values_sent = len(values)
                 state.stored, state.kept = answer.stored, answer.kept
                 state.replaced, state.rejected = answer.replaced, answer.rejected
                 state.series_status, state.reason = answer.status, answer.reason
                 state.warnings = answer.warnings
-                ir.async_delete_issue(self.hass, DOMAIN, sensor_changed_issue_id(self.entry_id))
+                if answer.status == "rejected":
+                    # A 200, but the one series sent stored nothing.
+                    reason = answer.reason or "rejected"
+                    self._quiet(now, REFUSED_RETRY if reason in _SERIES_REFUSALS else REQUEST_RETRY,
+                                "rejected", reason)
+                else:
+                    state.outcome, state.last_ok_utc = "ok", now
+                    ir.async_delete_issue(self.hass, DOMAIN, sensor_changed_issue_id(self.entry_id))
         except SolarianceUnavailableError as err:
             if err.reason == "irradiance_uploads_off":
                 self._quiet(now, SWITCHED_OFF_RETRY, "switched_off", err.reason)

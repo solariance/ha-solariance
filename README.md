@@ -153,7 +153,10 @@ reads Home Assistant's 5-minute statistics.
 - The sensor goes to Solariance under an id like `ha-1a2b3c4d5e6f-a1b2c3`, derived from the entity
   (not its name) and its position. Solariance fixes a sensor's position once it has values, so when
   you change the position in the options, the integration starts a new series under a new id by
-  itself; the values sent before stay with the old one.
+  itself; the values sent before stay with the old one. Solariance keeps at most 8 sensor ids per
+  system, and every new position takes one: once they are taken, the upload is refused
+  (`too_many_sensors`, in the log and the diagnostics) until you erase an unused id through the API
+  (`DELETE measured/irradiance`, see [developer.solariance.de](https://developer.solariance.de)).
 - It needs an API token with the **Upload** (or ReadWrite) scope. While Solariance does not take
   irradiance uploads yet, or your account does not include them, the integration says so once in
   the log (as information, not as an error) and asks again every 6 hours; other refusals are kept
