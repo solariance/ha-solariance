@@ -1,4 +1,4 @@
-"""The PV production upload (0.2): the chosen energy sensor's hourly statistics
+"""The PV production upload (0.3): the chosen energy sensor's hourly statistics
 to Solariance, once an hour.
 
 WHAT IS SENT. The recorder's long-term statistics of the sensor (any sensor

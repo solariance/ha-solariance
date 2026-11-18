@@ -1,4 +1,4 @@
-"""The production upload (0.2): the energy sensor's hourly statistics, once an
+"""The production upload (0.3): the energy sensor's hourly statistics, once an
 hour, fill-only (source ha_sensor), and what a refusal leaves behind."""
 from __future__ import annotations
 

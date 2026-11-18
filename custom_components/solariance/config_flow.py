@@ -170,7 +170,7 @@ class SolarianceConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class SolarianceOptionsFlow(OptionsFlowWithReload):
-    """How often the forecast is fetched, (0.2) the energy sensor whose
+    """How often the forecast is fetched, (0.3) the energy sensor whose
     production is uploaded every hour and (0.3) the irradiance sensor whose
     5-minute means are uploaded every 10 minutes -- neither by default. A
     change takes effect through Home Assistant's own reload after the flow;

@@ -33,7 +33,7 @@ EXTRA_DAYS = (2, 3, 4)
 APP_URL = "https://app.solariance.de"
 TOKEN_URL = "https://www.solariance.de/user/entwickler/"
 
-# Upload of the PV production (0.2): the chosen energy sensor's hourly
+# Upload of the PV production (0.3): the chosen energy sensor's hourly
 # statistics (kWh per hour, from the recorder's long-term statistics) are sent
 # to Solariance once an hour, the last UPLOAD_HOURS hours each time, so an hour
 # missed by a restart or a network gap is filled the next time. Solariance

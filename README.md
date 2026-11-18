@@ -124,7 +124,7 @@ actions:
 
 ## Upload your production (optional)
 
-Since 0.2 the integration can send your PV production to Solariance, so the nightly calibration
+Since 0.3 the integration can send your PV production to Solariance, so the nightly calibration
 learns how your roof differs from the model. Choose your PV energy sensor (kWh, `total_increasing`,
 the one your Energy dashboard uses) under Settings → Devices & services → Solariance → Configure.
 

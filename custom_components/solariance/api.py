@@ -1,10 +1,10 @@
 """A small async client for the Solariance REST API.
 
 Only what the integration needs: the account's systems (to set it up), the
-power forecast of one system (to run it), since 0.2 the upload of the
+power forecast of one system (to run it) and, since 0.3, the upload of the
 measured production (POST measured/production/upload, source "ha_sensor":
-stored fill-only, never replacing what the owner uploaded) and since 0.3 the
-upload of an irradiance sensor (POST measured/irradiance/upload, the same
+stored fill-only, never replacing what the owner uploaded) and the upload of
+an irradiance sensor (POST measured/irradiance/upload, the same
 fill-only source) with the system's roof (GET system/view) to prefill the
 sensor's position. The API is documented at https://developer.solariance.de.
 
@@ -49,7 +49,7 @@ from .const import API_BASE
 from .forecast import parse_status, parse_utc
 
 _TIMEOUT = aiohttp.ClientTimeout(total=30)
-_USER_AGENT = "HomeAssistant-Solariance/0.1.3"
+_USER_AGENT = "HomeAssistant-Solariance/0.3.0"
 STATUS_HEADER = "X-Solariance-Forecast-Status"
 ETA_HEADER = "X-Solariance-Forecast-Eta"
 

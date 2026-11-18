@@ -85,7 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -
 
 def _schedule_upload(hass: HomeAssistant, entry: SolarianceConfigEntry,
                      coordinator: SolarianceCoordinator) -> None:
-    """The production upload (0.2), once an hour at UPLOAD_MINUTE past, when
+    """The production upload (0.3), once an hour at UPLOAD_MINUTE past, when
     the options name an energy sensor. The second within that minute comes
     from the entry's id, so many installations do not arrive at once."""
     sensor = entry.options.get(CONF_UPLOAD_SENSOR)

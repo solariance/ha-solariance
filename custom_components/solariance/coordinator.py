@@ -144,7 +144,7 @@ class SolarianceCoordinator(DataUpdateCoordinator[SolarForecast]):
         self.client = SolarianceApiClient(async_get_clientsession(hass),
                                           entry.data[CONF_API_TOKEN])
         self.forecast_state = ForecastState()
-        # The production upload (0.2); None while no sensor is chosen.
+        # The production upload (0.3); None while no sensor is chosen.
         self.upload_state = None
         # The irradiance upload (0.3, an IrradianceUploader); None while no
         # irradiance sensor is chosen.
