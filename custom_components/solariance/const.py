@@ -31,7 +31,7 @@ RECOMPUTE_INTERVAL = timedelta(minutes=15)
 EXTRA_DAYS = (2, 3, 4)
 
 APP_URL = "https://app.solariance.de"
-TOKEN_URL = "https://www.solariance.de/user/"
+TOKEN_URL = "https://www.solariance.de/user/entwickler/"
 
 # Upload of the PV production (0.2): the chosen energy sensor's hourly
 # statistics (kWh per hour, from the recorder's long-term statistics) are sent

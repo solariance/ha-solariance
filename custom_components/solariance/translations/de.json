@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Solariance verbinden",
-        "description": "Fügen Sie einen persönlichen API-Token ein. Sie erstellen ihn unter {token_url} (Konto → API-Tokens); Lesezugriff genügt.",
+        "description": "Fügen Sie einen persönlichen API-Token ein. Sie erstellen ihn unter {token_url} (Konto → Entwickler → API Tokens verwalten). Für die Prognose genügt „Nur Leseberechtigung“; für die Uploads von Erzeugung oder Einstrahlung wählen Sie „Lesen und Messdaten hochladen“.",
         "data": {
           "api_token": "API-Token"
         },
@@ -50,8 +50,8 @@
         },
         "data_description": {
           "scan_interval": "Die Prognose ändert sich mit jedem Lauf des Wettermodells, einige Male am Tag. Free- und Plus-Konten teilen sich 30 Prognoseabfragen pro Stunde mit der Solariance-App.",
-          "upload_sensor": "Ihr Energiesensor der PV-Erzeugung (kWh, steigend). Jede Stunde gehen die letzten 48 Stundenwerte an Solariance, um Ihre Prognose zu kalibrieren. Solariance füllt nur Stunden, die es noch nicht hat, und ersetzt nie, was Sie selbst hochgeladen haben. Benötigt einen API-Token mit dem Bereich Upload (oder ReadWrite) und die Einwilligung für Messdaten in Ihrem Solariance-Konto.",
-          "irradiance_sensor": "Ein Sensor, der die Sonneneinstrahlung in W/m² misst (Pyranometer, Referenzzelle oder Wetterstation; Helligkeitssensoren in Lux eignen sich nicht). Alle 10 Minuten gehen seine 5-Minuten-Mittelwerte der letzten 2 Stunden an Solariance, einmal pro Stunde die der letzten 48 Stunden, um die Prognose Ihrer Anlage zu schärfen. Solariance ergänzt nur Werte, die es noch nicht hat. Benötigt einen API-Token mit dem Bereich Upload (oder ReadWrite). Lassen Sie das Feld leer, um den Upload auszuschalten."
+          "upload_sensor": "Ihr Energiesensor der PV-Erzeugung (kWh, steigend). Jede Stunde gehen die letzten 48 Stundenwerte an Solariance, um Ihre Prognose zu kalibrieren. Solariance füllt nur Stunden, die es noch nicht hat, und ersetzt nie, was Sie selbst hochgeladen haben. Benötigt einen API-Token mit der Berechtigung „Lesen und Messdaten hochladen“ (oder „Lese-/Schreibberechtigung“) und die Einwilligung für Messdaten in Ihrem Solariance-Konto.",
+          "irradiance_sensor": "Ein Sensor, der die Sonneneinstrahlung in W/m² misst (Pyranometer, Referenzzelle oder Wetterstation; Helligkeitssensoren in Lux eignen sich nicht). Alle 10 Minuten gehen seine 5-Minuten-Mittelwerte der letzten 2 Stunden an Solariance, einmal pro Stunde die der letzten 48 Stunden, um die Prognose Ihrer Anlage zu schärfen. Solariance ergänzt nur Werte, die es noch nicht hat. Benötigt einen API-Token mit der Berechtigung „Lesen und Messdaten hochladen“ (oder „Lese-/Schreibberechtigung“) und die Einwilligung für Messdaten in Ihrem Solariance-Konto. Lassen Sie das Feld leer, um den Upload auszuschalten."
         }
       },
       "irradiance": {

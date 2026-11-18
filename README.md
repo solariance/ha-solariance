@@ -8,7 +8,10 @@ action that finds the best time to run a device on solar power.
 
 - Home Assistant 2026.9 or newer
 - A Solariance account with at least one PV system (the free plan works)
-- A personal API token: [solariance.de/user](https://www.solariance.de/user/) → API tokens. Read-only is enough.
+- A personal API token: [solariance.de/user/entwickler](https://www.solariance.de/user/entwickler/)
+  (account page → Developer → Manage API Tokens). *Read only* is enough for the forecast. The two
+  optional uploads need the permission *Read and upload measured data* (German: *Lesen und Messdaten
+  hochladen*): it reads like a read-only token and writes nothing but measured data.
 
 ## Installation
 
@@ -27,7 +30,14 @@ Settings → Devices & services → Add integration → **Solariance**, then pas
 is checked by listing your systems. With several systems you pick one; add the integration again for
 each further system. Each system becomes one device.
 
-**Options:** how often the forecast is fetched (15, 30 or 60 minutes; default 30).
+**Options:** how often the forecast is fetched (15, 30 or 60 minutes; default 30), and the optional
+production and irradiance uploads (below).
+
+**Changing the token** (for example from a read-only token to one that can upload): the entry keeps
+the token it was set up with. Create the new token first, then delete the old one at
+[solariance.de/user/entwickler](https://www.solariance.de/user/entwickler/). At the next forecast
+update Home Assistant finds the old token refused and asks for a new one (*Re-authentication* under
+Settings → Devices & services): paste the new token there. The entry and its options stay.
 
 ## Entities
 
@@ -122,10 +132,11 @@ the one your Energy dashboard uses) under Settings → Devices & services → So
   Solariance (`POST measured/production/upload`, source `ha_sensor`).
 - Solariance only **fills** hours it does not have yet: an hour you uploaded yourself is never
   replaced, and re-sending the same hours stores nothing new.
-- It needs an API token with the **Upload** scope (it reads like a read-only token and writes only
-  measured data) or ReadWrite, and the measured-data opt-in in your Solariance account. Until then
-  the upload is refused, the integration says why in its diagnostics and the log (once, not every
-  hour), and the forecast sensors keep working.
+- It needs an API token with the permission **Read and upload measured data** (or *Read and
+  write*; a read-only token cannot upload) and the measured-data opt-in in your Solariance account.
+  Measured data is a beta and not yet part of every plan: an account without it is refused
+  (`feature_required`). Until then the upload is refused, the integration says why in its
+  diagnostics and the log (once, not every hour), and the forecast sensors keep working.
 - Leave the field empty to switch the upload off.
 
 ## Upload an irradiance sensor (optional)
@@ -157,7 +168,8 @@ reads Home Assistant's 5-minute statistics.
   system, and every new position takes one: once they are taken, the upload is refused
   (`too_many_sensors`, in the log and the diagnostics) until you erase an unused id through the API
   (`DELETE measured/irradiance`, see [developer.solariance.de](https://developer.solariance.de)).
-- It needs an API token with the **Upload** (or ReadWrite) scope. While Solariance does not take
+- It needs an API token with the permission **Read and upload measured data** (or *Read and
+  write*) and the measured-data opt-in, like the production upload. While Solariance does not take
   irradiance uploads yet, or your account does not include them, the integration says so once in
   the log (as information, not as an error) and asks again every 6 hours; other refusals are kept
   quiet the same way (the diagnostics show the next attempt). If Solariance reports that the id
@@ -199,7 +211,7 @@ as long as the API asks, and the sensors show *unavailable* meanwhile.
 ## Removal
 
 Delete the integration under Settings → Devices & services, then revoke the token at
-[solariance.de/user](https://www.solariance.de/user/).
+[solariance.de/user/entwickler](https://www.solariance.de/user/entwickler/).
 
 ## Privacy
 

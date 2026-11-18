@@ -129,7 +129,8 @@ _SERIES_REFUSALS = {"too_many_sensors", "unknown_system", "system_locked"}
 _HINTS = {
     "irradiance_uploads_off": "Solariance does not take irradiance uploads yet",
     "feature_required": "irradiance uploads are not part of the Solariance account yet",
-    "token_scope": "the API token needs the Upload (or ReadWrite) scope",
+    "token_scope": "the API token needs the permission 'Read and upload measured data' "
+                   "(or 'Read and write')",
     "measured_opt_in_required": "the Solariance account has not opted in to measured data",
     "system_locked": "the system is paused by the account's plan",
     "not_owner": "the system is not in the token's account",

@@ -133,7 +133,8 @@ def _log_change(system_id: str, sensor: str, state: UploadState) -> None:
         LOGGER.info("Solariance upload for %s from %s: %s", system_id, sensor, state.outcome)
         return
     hint = {
-        "token_scope": "the API token needs the Upload (or ReadWrite) scope",
+        "token_scope": "the API token needs the permission 'Read and upload measured data' "
+                       "(or 'Read and write')",
         "measured_opt_in_required": "the Solariance account has not opted in to measured data",
         "feature_required": "measured data is not switched on for the Solariance account",
     }.get(state.reason or "", state.reason or "")

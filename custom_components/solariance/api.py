@@ -8,9 +8,12 @@ upload of an irradiance sensor (POST measured/irradiance/upload, the same
 fill-only source) with the system's roof (GET system/view) to prefill the
 sensor's position. The API is documented at https://developer.solariance.de.
 
-AUTH. A personal API token, created at solariance.de/user, is sent as
-`Authorization: Bearer <token>`. Without the "Bearer " prefix the API reads it
-as a session token and answers 401. A read-only token is enough.
+AUTH. A personal API token, created at solariance.de/user/entwickler, is sent
+as `Authorization: Bearer <token>`. Without the "Bearer " prefix the API reads
+it as a session token and answers 401. A read-only token is enough for the
+forecast; the uploads need the Upload permission ("Read and upload measured
+data" on the account page) or ReadWrite. A read-only token's POST is refused
+with a 403 that names no reason.
 
 ANSWERS. Every answer is the envelope {"code", "message", "data"}. GET
 forecast/power answers 204 while the system has no forecast yet (a new system,

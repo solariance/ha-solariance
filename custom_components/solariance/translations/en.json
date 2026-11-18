@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect Solariance",
-        "description": "Paste a personal API token. Create one at {token_url} (Account → API tokens); read-only is enough.",
+        "description": "Paste a personal API token. Create one at {token_url} (Account → Developer → Manage API Tokens). “Read only” is enough for the forecast; for the production or irradiance upload, choose “Read and upload measured data”.",
         "data": {
           "api_token": "API token"
         },
@@ -50,8 +50,8 @@
         },
         "data_description": {
           "scan_interval": "The forecast changes with each weather model run, a few times a day. Free and Plus accounts share 30 forecast requests per hour with the Solariance app.",
-          "upload_sensor": "Your PV production energy sensor (kWh, total increasing). Every hour the last 48 hourly values go to Solariance to calibrate your forecast. Solariance only fills hours it does not have, so it never replaces what you uploaded yourself. Needs an API token with the Upload (or ReadWrite) scope and the measured-data opt-in in your Solariance account.",
-          "irradiance_sensor": "A sensor that measures solar irradiance in W/m² (a pyranometer, a reference cell or a weather station; light sensors in lux do not qualify). Every 10 minutes its 5-minute means of the last 2 hours go to Solariance, once an hour those of the last 48 hours, to sharpen your system's forecast. Solariance only fills values it does not have yet. Needs an API token with the Upload (or ReadWrite) scope. Leave empty to switch it off."
+          "upload_sensor": "Your PV production energy sensor (kWh, total increasing). Every hour the last 48 hourly values go to Solariance to calibrate your forecast. Solariance only fills hours it does not have, so it never replaces what you uploaded yourself. Needs an API token with the permission “Read and upload measured data” (or “Read and write”) and the measured-data opt-in in your Solariance account.",
+          "irradiance_sensor": "A sensor that measures solar irradiance in W/m² (a pyranometer, a reference cell or a weather station; light sensors in lux do not qualify). Every 10 minutes its 5-minute means of the last 2 hours go to Solariance, once an hour those of the last 48 hours, to sharpen your system's forecast. Solariance only fills values it does not have yet. Needs an API token with the permission “Read and upload measured data” (or “Read and write”) and the measured-data opt-in in your Solariance account. Leave empty to switch it off."
         }
       },
       "irradiance": {

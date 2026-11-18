@@ -90,7 +90,7 @@ async def test_refusals_say_why_and_log_only_when_it_changes(hass, aioclient_moc
     readonly = {"code": 403, "message": "This token is restricted to ReadOnly accesss", "data": None}
     state = await _run(hass, aioclient_mock, state, status=403, json=readonly)
     assert (state.outcome, state.reason) == ("refused", "token_scope")
-    assert "needs the Upload (or ReadWrite) scope" in caplog.text
+    assert "needs the permission 'Read and upload measured data'" in caplog.text
     caplog.clear()
     state = await _run(hass, aioclient_mock, state, status=403, json=readonly)
     assert caplog.text == "", "the same refusal is not logged again every hour"
