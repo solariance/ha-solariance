@@ -8,16 +8,33 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.event import async_track_time_change, async_track_utc_time_change
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_SYSTEM_ID, CONF_UPLOAD_SENSOR, DOMAIN, LOGGER, UPLOAD_MINUTE
+from .const import (
+    CONF_API_TOKEN,
+    CONF_IRRADIANCE_SENSOR,
+    CONF_SYSTEM_ID,
+    CONF_UPLOAD_SENSOR,
+    DOMAIN,
+    LOGGER,
+    UPLOAD_MINUTE,
+)
 from .coordinator import (
     SolarianceConfigEntry,
     SolarianceCoordinator,
     WaitForSolariance,
     async_delete_entry_issues,
+)
+from .irradiance import (
+    IrradianceConfig,
+    IrradianceUploader,
+    account_systems,
+    cadence_minutes,
+    sensor_changed_issue_id,
+    slots,
 )
 from .services import async_setup_services
 from .upload import UploadState, async_upload
@@ -61,6 +78,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -
     entry.async_on_unload(
         async_track_time_change(hass, _recompute, minute=(0, 15, 30, 45), second=5))
     _schedule_upload(hass, entry, coordinator)
+    _schedule_irradiance(hass, entry, coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
@@ -84,6 +102,34 @@ def _schedule_upload(hass: HomeAssistant, entry: SolarianceConfigEntry,
         async_track_time_change(hass, _upload, minute=UPLOAD_MINUTE, second=second))
 
 
+def _schedule_irradiance(hass: HomeAssistant, entry: SolarianceConfigEntry,
+                         coordinator: SolarianceCoordinator) -> None:
+    """The irradiance upload (0.3), every 10 minutes (20, 30 or 60 when more of
+    the account's systems upload irradiance), when the options name an
+    irradiance sensor. A sensor-changed issue left from before is closed: a
+    reload follows a change of the options or the issue's fix, and the next
+    run raises it again if Solariance still refuses."""
+    ir.async_delete_issue(hass, DOMAIN, sensor_changed_issue_id(entry.entry_id))
+    config = IrradianceConfig.from_options(entry.options)
+    if config is None:
+        if entry.options.get(CONF_IRRADIANCE_SENSOR):
+            LOGGER.warning("%s: the irradiance sensor's options are incomplete; nothing is "
+                           "uploaded until it is configured again.", entry.title)
+        return
+    cadence = cadence_minutes(account_systems(hass, entry.data[CONF_API_TOKEN]))
+    uploader = IrradianceUploader(hass, coordinator.client, entry_id=entry.entry_id,
+                                  title=entry.title, system_id=entry.data[CONF_SYSTEM_ID],
+                                  config=config, cadence=cadence)
+    coordinator.irradiance = uploader
+    minutes, second = slots(entry.entry_id, cadence)
+
+    async def _run(now: datetime) -> None:
+        await uploader.async_run(now)
+
+    entry.async_on_unload(
+        async_track_utc_time_change(hass, _run, minute=minutes, second=second))
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -> bool:
     """Unload a config entry. The paused notice goes with it (a reload sets
     it again if the system is still paused); the system-gone issue stays
@@ -97,3 +143,4 @@ async def async_unload_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) 
 async def async_remove_entry(hass: HomeAssistant, entry: SolarianceConfigEntry) -> None:
     """A removed entry's repair issues go with it."""
     async_delete_entry_issues(hass, entry.entry_id)
+    ir.async_delete_issue(hass, DOMAIN, sensor_changed_issue_id(entry.entry_id))

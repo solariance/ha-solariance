@@ -12,6 +12,9 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -31,16 +34,29 @@ from .api import (
 )
 from .const import (
     CONF_API_TOKEN,
+    CONF_IRRADIANCE_AZIMUTH,
+    CONF_IRRADIANCE_PLANE,
+    CONF_IRRADIANCE_SENSOR,
+    CONF_IRRADIANCE_TILT,
+    CONF_IRRADIANCE_TYPE,
     CONF_SCAN_INTERVAL,
     CONF_SYSTEM_ID,
     CONF_UPLOAD_SENSOR,
+    DEFAULT_IRRADIANCE_AZIMUTH,
+    DEFAULT_IRRADIANCE_TILT,
+    DEFAULT_IRRADIANCE_TYPE,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    IRRADIANCE_PLANES,
+    IRRADIANCE_TYPES,
     LOGGER,
+    PLANE_HORIZONTAL,
+    PLANE_MODULE,
     SCAN_INTERVALS,
     TOKEN_URL,
 )
 from .coordinator import SolarianceConfigEntry
+from .irradiance import entity_problem, irradiance_options, roof_face
 
 TOKEN_SCHEMA = vol.Schema({
     vol.Required(CONF_API_TOKEN): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
@@ -154,20 +170,41 @@ class SolarianceConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class SolarianceOptionsFlow(OptionsFlowWithReload):
-    """How often the forecast is fetched, and (0.2) the energy sensor whose
-    production is uploaded every hour -- none by default. A change takes
-    effect through Home Assistant's own reload after the flow; an update
-    listener doing the same is deprecated (it breaks in Home Assistant
-    2026.12) and made re-authentication log a warning."""
+    """How often the forecast is fetched, (0.2) the energy sensor whose
+    production is uploaded every hour and (0.3) the irradiance sensor whose
+    5-minute means are uploaded every 10 minutes -- neither by default. A
+    change takes effect through Home Assistant's own reload after the flow;
+    an update listener doing the same is deprecated (it breaks in Home
+    Assistant 2026.12) and made re-authentication log a warning.
+
+    The irradiance sensor takes up to two more steps: its plane and type,
+    then, for a sensor in the module plane, its tilt and azimuth (prefilled
+    from the options, else from the system's largest roof face, else 30° and
+    180°)."""
+
+    def __init__(self) -> None:
+        self._options: dict[str, Any] = {}
+        self._irradiance: dict[str, Any] = {}
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        current_options = self.config_entry.options
         if user_input is not None:
-            data: dict[str, Any] = {CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL])}
+            self._options = {CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL])}
             if user_input.get(CONF_UPLOAD_SENSOR):
-                data[CONF_UPLOAD_SENSOR] = user_input[CONF_UPLOAD_SENSOR]
-            return self.async_create_entry(data=data)
-        current = int(self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
-        sensor = self.config_entry.options.get(CONF_UPLOAD_SENSOR)
+                self._options[CONF_UPLOAD_SENSOR] = user_input[CONF_UPLOAD_SENSOR]
+            irradiance = user_input.get(CONF_IRRADIANCE_SENSOR)
+            if not irradiance:
+                return self.async_create_entry(data=self._options)
+            if problem := entity_problem(self.hass, irradiance):
+                errors[CONF_IRRADIANCE_SENSOR] = problem
+            else:
+                self._irradiance = {CONF_IRRADIANCE_SENSOR: irradiance}
+                return await self.async_step_irradiance()
+        current = int(current_options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
+        sensor = current_options.get(CONF_UPLOAD_SENSOR)
+        irradiance = (user_input or {}).get(CONF_IRRADIANCE_SENSOR,
+                                            current_options.get(CONF_IRRADIANCE_SENSOR))
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
@@ -179,5 +216,95 @@ class SolarianceOptionsFlow(OptionsFlowWithReload):
                 vol.Optional(CONF_UPLOAD_SENSOR, description={"suggested_value": sensor}):
                     EntitySelector(EntitySelectorConfig(domain="sensor",
                                                         device_class=SensorDeviceClass.ENERGY)),
+                # Irradiance only: an illuminance sensor (lux) is not offered.
+                vol.Optional(CONF_IRRADIANCE_SENSOR, description={"suggested_value": irradiance}):
+                    EntitySelector(EntitySelectorConfig(domain="sensor",
+                                                        device_class=SensorDeviceClass.IRRADIANCE)),
+            }),
+            errors=errors,
+        )
+
+    async def async_step_irradiance(self, user_input: dict[str, Any] | None = None
+                                    ) -> ConfigFlowResult:
+        """Where the irradiance sensor lies, and what it is."""
+        if user_input is not None:
+            self._irradiance[CONF_IRRADIANCE_PLANE] = user_input[CONF_IRRADIANCE_PLANE]
+            self._irradiance[CONF_IRRADIANCE_TYPE] = user_input[CONF_IRRADIANCE_TYPE]
+            if user_input[CONF_IRRADIANCE_PLANE] == PLANE_MODULE:
+                return await self.async_step_irradiance_module()
+            return self._finish()
+        current = self._current_irradiance()
+        plane = current.get(CONF_IRRADIANCE_PLANE)
+        sensor_type = current.get(CONF_IRRADIANCE_TYPE)
+        return self.async_show_form(
+            step_id="irradiance",
+            data_schema=vol.Schema({
+                vol.Required(CONF_IRRADIANCE_PLANE,
+                             default=plane if plane in IRRADIANCE_PLANES else PLANE_HORIZONTAL):
+                    SelectSelector(SelectSelectorConfig(
+                        options=list(IRRADIANCE_PLANES), mode=SelectSelectorMode.LIST,
+                        translation_key=CONF_IRRADIANCE_PLANE)),
+                vol.Required(CONF_IRRADIANCE_TYPE,
+                             default=sensor_type if sensor_type in IRRADIANCE_TYPES
+                             else DEFAULT_IRRADIANCE_TYPE):
+                    SelectSelector(SelectSelectorConfig(
+                        options=list(IRRADIANCE_TYPES), mode=SelectSelectorMode.DROPDOWN,
+                        translation_key=CONF_IRRADIANCE_TYPE)),
+            }),
+            description_placeholders={"entity": self._irradiance[CONF_IRRADIANCE_SENSOR]},
+        )
+
+    async def async_step_irradiance_module(self, user_input: dict[str, Any] | None = None
+                                           ) -> ConfigFlowResult:
+        """The tilt and azimuth of a sensor in the module plane."""
+        if user_input is not None:
+            self._irradiance[CONF_IRRADIANCE_TILT] = user_input[CONF_IRRADIANCE_TILT]
+            self._irradiance[CONF_IRRADIANCE_AZIMUTH] = user_input[CONF_IRRADIANCE_AZIMUTH]
+            return self._finish()
+        tilt, azimuth = await self._default_position()
+        degrees = {"min": 0, "step": 1, "unit_of_measurement": "°",
+                   "mode": NumberSelectorMode.BOX}
+        return self.async_show_form(
+            step_id="irradiance_module",
+            data_schema=vol.Schema({
+                vol.Required(CONF_IRRADIANCE_TILT, default=tilt):
+                    NumberSelector(NumberSelectorConfig(max=90, **degrees)),
+                vol.Required(CONF_IRRADIANCE_AZIMUTH, default=azimuth):
+                    NumberSelector(NumberSelectorConfig(max=360, **degrees)),
             }),
         )
+
+    def _current_irradiance(self) -> dict[str, Any]:
+        """The stored irradiance options, when they are for the sensor chosen now."""
+        options = self.config_entry.options
+        if options.get(CONF_IRRADIANCE_SENSOR) != self._irradiance.get(CONF_IRRADIANCE_SENSOR):
+            return {}
+        return dict(options)
+
+    async def _default_position(self) -> tuple[int, int]:
+        """The stored position, else the system's largest roof face (one GET
+        system/view, outside the forecast limit), else 30° tilt facing south."""
+        current = self._current_irradiance()
+        if current.get(CONF_IRRADIANCE_PLANE) == PLANE_MODULE:
+            tilt, azimuth = current.get(CONF_IRRADIANCE_TILT), current.get(CONF_IRRADIANCE_AZIMUTH)
+            if isinstance(tilt, int) and isinstance(azimuth, int):
+                return tilt, azimuth
+        client = SolarianceApiClient(async_get_clientsession(self.hass),
+                                     self.config_entry.data[CONF_API_TOKEN])
+        try:
+            face = roof_face(await client.async_get_system(self.config_entry.data[CONF_SYSTEM_ID]))
+        except SolarianceError as err:
+            LOGGER.debug("No roof to prefill the irradiance sensor's position: %s", err)
+            face = None
+        except Exception:  # noqa: BLE001 -- a prefill must never break the form
+            LOGGER.exception("Unexpected error while reading the system's roof")
+            face = None
+        return face or (DEFAULT_IRRADIANCE_TILT, DEFAULT_IRRADIANCE_AZIMUTH)
+
+    def _finish(self) -> ConfigFlowResult:
+        irradiance = self._irradiance
+        self._options.update(irradiance_options(
+            self.hass, self.config_entry.options, irradiance[CONF_IRRADIANCE_SENSOR],
+            irradiance[CONF_IRRADIANCE_PLANE], irradiance[CONF_IRRADIANCE_TYPE],
+            irradiance.get(CONF_IRRADIANCE_TILT), irradiance.get(CONF_IRRADIANCE_AZIMUTH)))
+        return self.async_create_entry(data=self._options)

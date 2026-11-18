@@ -45,13 +45,44 @@
         "title": "Solariance-Optionen",
         "data": {
           "scan_interval": "Prognose aktualisieren alle",
-          "upload_sensor": "Erzeugung dieses Sensors hochladen (optional)"
+          "upload_sensor": "Erzeugung dieses Sensors hochladen (optional)",
+          "irradiance_sensor": "Einstrahlung dieses Sensors hochladen (optional)"
         },
         "data_description": {
           "scan_interval": "Die Prognose ändert sich mit jedem Lauf des Wettermodells, einige Male am Tag. Free- und Plus-Konten teilen sich 30 Prognoseabfragen pro Stunde mit der Solariance-App.",
-          "upload_sensor": "Ihr Energiesensor der PV-Erzeugung (kWh, steigend). Jede Stunde gehen die letzten 48 Stundenwerte an Solariance, um Ihre Prognose zu kalibrieren. Solariance füllt nur Stunden, die es noch nicht hat, und ersetzt nie, was Sie selbst hochgeladen haben. Benötigt einen API-Token mit dem Bereich Upload (oder ReadWrite) und die Einwilligung für Messdaten in Ihrem Solariance-Konto."
+          "upload_sensor": "Ihr Energiesensor der PV-Erzeugung (kWh, steigend). Jede Stunde gehen die letzten 48 Stundenwerte an Solariance, um Ihre Prognose zu kalibrieren. Solariance füllt nur Stunden, die es noch nicht hat, und ersetzt nie, was Sie selbst hochgeladen haben. Benötigt einen API-Token mit dem Bereich Upload (oder ReadWrite) und die Einwilligung für Messdaten in Ihrem Solariance-Konto.",
+          "irradiance_sensor": "Ein Sensor, der die Sonneneinstrahlung in W/m² misst (Pyranometer, Referenzzelle oder Wetterstation; Helligkeitssensoren in Lux eignen sich nicht). Alle 10 Minuten gehen seine 5-Minuten-Mittelwerte der letzten 2 Stunden an Solariance, einmal pro Stunde die der letzten 48 Stunden, um die Prognose Ihrer Anlage zu schärfen. Solariance ergänzt nur Werte, die es noch nicht hat. Benötigt einen API-Token mit dem Bereich Upload (oder ReadWrite). Lassen Sie das Feld leer, um den Upload auszuschalten."
+        }
+      },
+      "irradiance": {
+        "title": "Einstrahlungssensor",
+        "description": "Wie ist {entity} montiert?",
+        "data": {
+          "irradiance_plane": "Ebene",
+          "irradiance_type": "Sensortyp"
+        },
+        "data_description": {
+          "irradiance_plane": "Horizontal: liegt waagerecht, wie bei den meisten Wetterstationen. Modulebene: geneigt wie Ihre PV-Module.",
+          "irradiance_type": "Womit die Einstrahlung gemessen wird."
+        }
+      },
+      "irradiance_module": {
+        "title": "Lage des Sensors",
+        "description": "Neigung und Ausrichtung des Sensors, vorausgefüllt mit der größten Dachfläche Ihrer Anlage, wenn Solariance sie kennt.",
+        "data": {
+          "irradiance_tilt": "Neigung",
+          "irradiance_azimuth": "Azimut"
+        },
+        "data_description": {
+          "irradiance_tilt": "0° = waagerecht, 90° = senkrecht.",
+          "irradiance_azimuth": "Im Uhrzeigersinn von Norden: 90° = Osten, 180° = Süden, 270° = Westen. Setzen Sie den Sensor später an eine andere Stelle, beginnt in Solariance eine neue Messreihe."
         }
       }
+    },
+    "error": {
+      "not_irradiance": "Wählen Sie einen Sensor mit der Geräteklasse Einstrahlung (W/m²). Helligkeitssensoren (Lux) sind nicht geeignet.",
+      "unsupported_unit": "Die Einheit dieses Sensors lässt sich nicht in W/m² umrechnen.",
+      "no_statistics": "Dieser Sensor führt in Home Assistant keine Statistik (er braucht die Zustandsklasse „measurement“)."
     }
   },
   "selector": {
@@ -66,6 +97,20 @@
       "options": {
         "hour": "Stündlich",
         "quarter_hour": "Viertelstündlich"
+      }
+    },
+    "irradiance_plane": {
+      "options": {
+        "horizontal": "Horizontal",
+        "module": "Modulebene"
+      }
+    },
+    "irradiance_type": {
+      "options": {
+        "weather_station": "Wetterstation",
+        "pyranometer": "Pyranometer",
+        "reference_cell": "Referenzzelle",
+        "other": "Sonstiges"
       }
     }
   },
@@ -229,6 +274,20 @@
     "system_paused_system_limit": {
       "title": "Solariance-Anlage pausiert",
       "description": "„{name}“ ist pausiert: Ihr Konto umfasst derzeit weniger Anlagen, als Sie angelegt haben. Die Sensoren bleiben nicht verfügbar, bis die Anlage in Ihrem Solariance-Konto wieder aktiv ist."
+    },
+    "irradiance_sensor_changed": {
+      "title": "{title}: Kennung des Einstrahlungssensors vergeben",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Neue Einstrahlungs-Messreihe beginnen",
+            "description": "Solariance hat für die Sensorkennung {sensor_id} von „{title}“ bereits Werte mit einer anderen Lage gespeichert, und die Lage eines Sensors lässt sich nicht mehr ändern, sobald er Werte hat. Der Einstrahlungs-Upload ist angehalten. Senden Sie ab, um unter einer neuen Sensorkennung weiterzumachen; die Werte unter der alten Kennung bleiben dort. Ist die Lage in den Optionen falsch, korrigieren Sie sie stattdessen unter „Konfigurieren“: Eine neue Lage erhält von selbst eine neue Kennung."
+          }
+        },
+        "abort": {
+          "entry_not_found": "Dieser Solariance-Eintrag existiert nicht mehr."
+        }
+      }
     }
   }
 }

@@ -45,13 +45,44 @@
         "title": "Solariance options",
         "data": {
           "scan_interval": "Update the forecast every",
-          "upload_sensor": "Upload the production of this sensor (optional)"
+          "upload_sensor": "Upload the production of this sensor (optional)",
+          "irradiance_sensor": "Upload the irradiance of this sensor (optional)"
         },
         "data_description": {
           "scan_interval": "The forecast changes with each weather model run, a few times a day. Free and Plus accounts share 30 forecast requests per hour with the Solariance app.",
-          "upload_sensor": "Your PV production energy sensor (kWh, total increasing). Every hour the last 48 hourly values go to Solariance to calibrate your forecast. Solariance only fills hours it does not have, so it never replaces what you uploaded yourself. Needs an API token with the Upload (or ReadWrite) scope and the measured-data opt-in in your Solariance account."
+          "upload_sensor": "Your PV production energy sensor (kWh, total increasing). Every hour the last 48 hourly values go to Solariance to calibrate your forecast. Solariance only fills hours it does not have, so it never replaces what you uploaded yourself. Needs an API token with the Upload (or ReadWrite) scope and the measured-data opt-in in your Solariance account.",
+          "irradiance_sensor": "A sensor that measures solar irradiance in W/m² (a pyranometer, a reference cell or a weather station; light sensors in lux do not qualify). Every 10 minutes its 5-minute means of the last 2 hours go to Solariance, once an hour those of the last 48 hours, to sharpen your system's forecast. Solariance only fills values it does not have yet. Needs an API token with the Upload (or ReadWrite) scope. Leave empty to switch it off."
+        }
+      },
+      "irradiance": {
+        "title": "Irradiance sensor",
+        "description": "How is {entity} mounted?",
+        "data": {
+          "irradiance_plane": "Plane",
+          "irradiance_type": "Sensor type"
+        },
+        "data_description": {
+          "irradiance_plane": "Horizontal: lying flat, as on most weather stations. Module plane: tilted like your PV modules.",
+          "irradiance_type": "What measures the irradiance."
+        }
+      },
+      "irradiance_module": {
+        "title": "Sensor position",
+        "description": "Tilt and orientation of the sensor, prefilled with your system's largest roof face when Solariance has it.",
+        "data": {
+          "irradiance_tilt": "Tilt",
+          "irradiance_azimuth": "Azimuth"
+        },
+        "data_description": {
+          "irradiance_tilt": "0° = flat, 90° = vertical.",
+          "irradiance_azimuth": "Clockwise from north: 90° = east, 180° = south, 270° = west. A sensor moved to another position later starts a new series in Solariance."
         }
       }
+    },
+    "error": {
+      "not_irradiance": "Choose a sensor with the device class irradiance (W/m²). Illuminance sensors (lux) cannot be used.",
+      "unsupported_unit": "This sensor's unit cannot be converted to W/m².",
+      "no_statistics": "This sensor keeps no statistics in Home Assistant (it needs the state class measurement)."
     }
   },
   "selector": {
@@ -66,6 +97,20 @@
       "options": {
         "hour": "Hourly",
         "quarter_hour": "Quarter-hourly"
+      }
+    },
+    "irradiance_plane": {
+      "options": {
+        "horizontal": "Horizontal",
+        "module": "Module plane"
+      }
+    },
+    "irradiance_type": {
+      "options": {
+        "weather_station": "Weather station",
+        "pyranometer": "Pyranometer",
+        "reference_cell": "Reference cell",
+        "other": "Other"
       }
     }
   },
@@ -229,6 +274,20 @@
     "system_paused_system_limit": {
       "title": "Solariance system paused",
       "description": "“{name}” is paused: your account currently includes fewer systems than you have set up. Its sensors stay unavailable until the system is active again in your Solariance account."
+    },
+    "irradiance_sensor_changed": {
+      "title": "{title}: irradiance sensor id taken",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Start a new irradiance series",
+            "description": "Solariance already holds values for the irradiance sensor id {sensor_id} of “{title}” with a different position, and a sensor's position cannot change once it has values. The irradiance upload is stopped. Submit to go on under a new sensor id; the values stored under the old id stay there. If the position in the options is wrong, correct it under Configure instead: a new position gets a new id by itself."
+          }
+        },
+        "abort": {
+          "entry_not_found": "This Solariance entry no longer exists."
+        }
+      }
     }
   }
 }
