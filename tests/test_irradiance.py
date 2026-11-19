@@ -337,6 +337,53 @@ async def test_a_refusal_keeps_quiet_for_its_time_and_logs_once(hass, aioclient_
     assert len([r for r in caplog.records if "irradiance upload" in r.getMessage()]) == 1
 
 
+def _feature_required(feature):
+    """The 403 features.forbidden() answers: data.feature names what is missing."""
+    data = {"reason": "feature_required"} | ({"feature": feature} if feature else {})
+    return {"status": 403,
+            "json": {"code": 403, "message": "This feature is not part of the account's contract.",
+                     "data": data}}
+
+
+@pytest.mark.parametrize(("feature", "words"), [
+    ("measured_data",
+     "measured data is not switched on for the Solariance account (feature measured_data)"),
+    ("ai_irradiance",
+     "irradiance uploads are not part of the Solariance account yet (feature ai_irradiance)"),
+    ("something_new", "the Solariance account lacks the feature something_new"),
+    (None, "irradiance uploads are not part of the Solariance account yet"),
+])
+async def test_feature_required_names_the_missing_feature(hass, aioclient_mock, caplog, feature,
+                                                          words):
+    """0.3.1: the plan without measured data at all, or without the irradiance
+    upload itself, in the log line and the diagnostics."""
+    caplog.set_level(logging.INFO)
+    up = _uploader(hass)
+    await _run(up, aioclient_mock, NOW_UTC, **_feature_required(feature))
+    assert (up.state.outcome, up.state.reason, up.state.feature) == (
+        "refused", "feature_required", feature)
+    assert up.state.as_dict()["feature"] == feature
+    assert up.state.next_attempt_utc == NOW_UTC + timedelta(hours=6)
+    (record,) = [r for r in caplog.records if "irradiance upload" in r.getMessage()]
+    assert record.levelno == logging.INFO
+    assert f"refused ({words})" in record.getMessage()
+
+
+async def test_another_missing_feature_is_logged_again_and_a_stored_run_clears_it(
+        hass, aioclient_mock, caplog):
+    caplog.set_level(logging.INFO)
+    up = _uploader(hass)
+    t = NOW_UTC
+    for feature in ("measured_data", "measured_data", "ai_irradiance"):
+        await _run(up, aioclient_mock, t, **_feature_required(feature))
+        t += timedelta(hours=6)
+    records = [r.getMessage() for r in caplog.records if "irradiance upload" in r.getMessage()]
+    assert len(records) == 2, "the same refusal is said once, another feature again"
+    assert "measured_data" in records[0] and "ai_irradiance" in records[1]
+    await _run(up, aioclient_mock, t)
+    assert (up.state.outcome, up.state.feature) == ("ok", None)
+
+
 async def test_a_server_error_tries_again_at_the_next_run(hass, aioclient_mock, caplog):
     up = _uploader(hass)
     await _run(up, aioclient_mock, NOW_UTC, status=502)

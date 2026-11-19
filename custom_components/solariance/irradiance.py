@@ -34,7 +34,9 @@ of the entity's name leaves Home Assistant.
 WHEN IT IS REFUSED, one log line per change, never one per run, and no retry
 storm on the account's budget: Solariance has the uploads switched off (503
 irradiance_uploads_off) or the account lacks the feature (403
-feature_required) -> INFO, next try in 6 hours; no measured-data opt-in, no
+feature_required; the log and the diagnostics name which one: measured_data,
+the plan has no measured data at all, or ai_irradiance, the irradiance upload
+itself) -> INFO, next try in 6 hours; no measured-data opt-in, no
 Upload scope, a paused system -> WARNING, 6 hours; 429 -> its Retry-After
 (1 minute to 6 hours, 1 hour without one); 401 or another 4xx -> 1 hour; 409
 sensor_changed -> a repair issue whose fix starts a new id, and no upload
@@ -125,6 +127,14 @@ _QUIET = {("switched_off", "irradiance_uploads_off"), ("refused", "feature_requi
 # system's eight sensor ids are taken, the system is not the account's, or the
 # plan has paused it. Quiet as long as a refusal; any other reason 1 hour.
 _SERIES_REFUSALS = {"too_many_sensors", "unknown_system", "system_locked"}
+
+# A 403 feature_required names the feature (0.3.1): which one says what is missing.
+_FEATURE_HINTS = {
+    "measured_data": "measured data is not switched on for the Solariance account "
+                     "(feature measured_data)",
+    "ai_irradiance": "irradiance uploads are not part of the Solariance account yet "
+                     "(feature ai_irradiance)",
+}
 
 _HINTS = {
     "irradiance_uploads_off": "Solariance does not take irradiance uploads yet",
@@ -398,6 +408,7 @@ class IrradianceState:
     # rejected | rate_limited | auth | request | sensor_changed | failed
     outcome: str | None = None
     reason: str | None = None
+    feature: str | None = None                 # what a 403 feature_required names
     window_hours: int = 0
     values_sent: int = 0
     stored: int = 0
@@ -416,7 +427,8 @@ class IrradianceState:
             "entity_id": config.entity_id, "sensor_id": config.sensor_id, "plane": config.plane,
             "tilt_deg": config.tilt, "azimuth_deg": config.azimuth, "type": config.sensor_type,
             "cadence_minutes": self.cadence_minutes, "last_run_utc": _iso(self.last_run_utc),
-            "outcome": self.outcome, "reason": self.reason, "window_hours": self.window_hours,
+            "outcome": self.outcome, "reason": self.reason, "feature": self.feature,
+            "window_hours": self.window_hours,
             "values_sent": self.values_sent, "stored": self.stored, "kept": self.kept,
             "replaced": self.replaced, "rejected": self.rejected,
             "series_status": self.series_status, "warnings": list(self.warnings),
@@ -457,10 +469,10 @@ class IrradianceUploader:
         now = now.astimezone(UTC)
         if state.stopped or (state.next_attempt_utc is not None and now < state.next_attempt_utc):
             return state
-        previous = (state.outcome, state.reason)
+        previous = (state.outcome, state.reason, state.feature)
         hours = self.window_hours(now)
         state.last_run_utc, state.window_hours, state.next_attempt_utc = now, hours, None
-        state.reason, state.series_status, state.warnings = None, None, ()
+        state.reason, state.feature, state.series_status, state.warnings = None, None, None, ()
         state.values_sent = state.stored = state.kept = state.replaced = state.rejected = 0
         try:
             read = await async_five_minute_rows(self.hass, config.entity_id, now, hours)
@@ -502,6 +514,7 @@ class IrradianceUploader:
         except SolarianceRefusedError as err:
             # No reason: the token's scope (ReadOnly). Otherwise the account's.
             self._quiet(now, REFUSED_RETRY, "refused", err.reason or "token_scope")
+            state.feature = err.feature
         except SolarianceRequestError as err:
             if err.status == 409 and err.reason == "sensor_changed":
                 self._sensor_changed()
@@ -511,7 +524,7 @@ class IrradianceUploader:
             state.outcome, state.reason = "failed", type(err).__name__
         except Exception as err:  # noqa: BLE001 -- a recorder problem must not break the entry
             state.outcome, state.reason = "failed", type(err).__name__
-        if (state.outcome, state.reason) != previous:
+        if (state.outcome, state.reason, state.feature) != previous:
             self._log_change()
         return state
 
@@ -540,6 +553,9 @@ class IrradianceUploader:
             LOGGER.info(lead, *args)
             return
         hint = _HINTS.get(state.reason or "", state.reason or "")
+        if state.reason == "feature_required" and state.feature:
+            hint = _FEATURE_HINTS.get(
+                state.feature, f"the Solariance account lacks the feature {state.feature}")
         if state.stopped:
             then = "No more uploads until the sensor is configured again."
         elif state.next_attempt_utc is not None and state.last_run_utc is not None:

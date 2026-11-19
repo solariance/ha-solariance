@@ -171,10 +171,12 @@ reads Home Assistant's 5-minute statistics.
 - It needs an API token with the permission **Read and upload measured data** (or *Read and
   write*) and the measured-data opt-in, like the production upload. While Solariance does not take
   irradiance uploads yet, or your account does not include them, the integration says so once in
-  the log (as information, not as an error) and asks again every 6 hours; other refusals are kept
-  quiet the same way (the diagnostics show the next attempt). If Solariance reports that the id
-  already has values with another position, a repair issue *irradiance sensor id taken* appears:
-  submitting it continues under a new id.
+  the log (as information, not as an error) and asks again every 6 hours. The log and the
+  diagnostics (`feature`) name what the account lacks: `measured_data` (no measured data at all)
+  or `ai_irradiance` (the irradiance upload itself). Other refusals are kept quiet the same way
+  (the diagnostics show the next attempt). If Solariance reports that the id already has values
+  with another position, a repair issue *irradiance sensor id taken* appears: submitting it
+  continues under a new id.
 - None of this affects the forecast sensors or the production upload. Leave the field empty to
   switch the irradiance upload off.
 

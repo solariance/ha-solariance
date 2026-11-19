@@ -78,11 +78,15 @@ class SolarianceUnavailableError(SolarianceConnectionError):
 
 class SolarianceRefusedError(SolarianceError):
     """A 403: the account or its plan refuses this request. Not the token's
-    fault -- a new one would be refused the same."""
+    fault -- a new one would be refused the same. `feature` is the feature a
+    "feature_required" names (0.3.1): "measured_data" when the plan has no
+    measured data at all, "ai_irradiance" when it lacks the irradiance upload."""
 
-    def __init__(self, reason: str | None) -> None:
-        super().__init__(f"refused ({reason or 'no reason given'})")
+    def __init__(self, reason: str | None, feature: str | None = None) -> None:
+        detail = f"{reason}: {feature}" if reason and feature else reason or "no reason given"
+        super().__init__(f"refused ({detail})")
         self.reason = reason
+        self.feature = feature
 
 
 class SolarianceSystemGoneError(SolarianceRefusedError):
@@ -308,7 +312,9 @@ async def _refusal(resp: aiohttp.ClientResponse) -> SolarianceError:
         return SolarianceSystemPausedError(str(data.get("locked_reason") or "") or None)
     if reason == "not_owner":
         return SolarianceSystemGoneError(reason)
-    return SolarianceRefusedError(reason if isinstance(reason, str) else None)
+    feature = data.get("feature") if isinstance(data, dict) else None
+    return SolarianceRefusedError(reason if isinstance(reason, str) else None,
+                                  feature if isinstance(feature, str) and feature else None)
 
 
 async def _reason(resp: aiohttp.ClientResponse) -> str | None:
