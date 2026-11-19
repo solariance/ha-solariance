@@ -33,11 +33,12 @@ each further system. Each system becomes one device.
 **Options:** how often the forecast is fetched (15, 30 or 60 minutes; default 30), and the optional
 production and irradiance uploads (below).
 
-**Changing the token** (for example from a read-only token to one that can upload): the entry keeps
-the token it was set up with. Create the new token first, then delete the old one at
-[solariance.de/user/entwickler](https://www.solariance.de/user/entwickler/). At the next forecast
-update Home Assistant finds the old token refused and asks for a new one (*Re-authentication* under
-Settings → Devices & services): paste the new token there. The entry and its options stay.
+**Changing the token** (for example from a read-only token to one that can upload): Settings →
+Devices & services → Solariance → the entry's ⋮ menu → **Reconfigure**, and paste the new token. It
+is checked as at setup and must belong to the account that has the system; the entry reloads and
+keeps its options. Then delete the old token at
+[solariance.de/user/entwickler](https://www.solariance.de/user/entwickler/). With several systems,
+reconfigure each entry.
 
 ## Entities
 
