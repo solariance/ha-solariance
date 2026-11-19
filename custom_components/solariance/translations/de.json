@@ -24,6 +24,16 @@
         "data": {
           "api_token": "API-Token"
         }
+      },
+      "reconfigure": {
+        "title": "API-Token für {name} ändern",
+        "description": "Fügen Sie einen neuen API-Token ein, etwa einen mit der Berechtigung „Lesen und Messdaten hochladen“ für die Uploads. Sie erstellen ihn unter {token_url}. Er muss zu dem Konto gehören, das diese Anlage hat; die Optionen bleiben erhalten. Den alten Token löschen Sie danach dort.",
+        "data": {
+          "api_token": "API-Token"
+        },
+        "data_description": {
+          "api_token": "Der Token wird geprüft, indem Ihre Anlagen abgerufen werden."
+        }
       }
     },
     "error": {
@@ -36,7 +46,8 @@
     },
     "abort": {
       "already_configured": "Alle Anlagen dieses Kontos sind bereits eingerichtet.",
-      "reauth_successful": "Der neue Token ist gespeichert."
+      "reauth_successful": "Der neue Token ist gespeichert.",
+      "reconfigure_successful": "Der neue Token ist gespeichert."
     }
   },
   "options": {

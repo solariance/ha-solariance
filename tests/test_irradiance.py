@@ -337,6 +337,53 @@ async def test_a_refusal_keeps_quiet_for_its_time_and_logs_once(hass, aioclient_
     assert len([r for r in caplog.records if "irradiance upload" in r.getMessage()]) == 1
 
 
+def _feature_required(feature):
+    """The 403 features.forbidden() answers: data.feature names what is missing."""
+    data = {"reason": "feature_required"} | ({"feature": feature} if feature else {})
+    return {"status": 403,
+            "json": {"code": 403, "message": "This feature is not part of the account's contract.",
+                     "data": data}}
+
+
+@pytest.mark.parametrize(("feature", "words"), [
+    ("measured_data",
+     "measured data is not switched on for the Solariance account (feature measured_data)"),
+    ("ai_irradiance",
+     "irradiance uploads are not part of the Solariance account yet (feature ai_irradiance)"),
+    ("something_new", "the Solariance account lacks the feature something_new"),
+    (None, "irradiance uploads are not part of the Solariance account yet"),
+])
+async def test_feature_required_names_the_missing_feature(hass, aioclient_mock, caplog, feature,
+                                                          words):
+    """0.3.1: the plan without measured data at all, or without the irradiance
+    upload itself, in the log line and the diagnostics."""
+    caplog.set_level(logging.INFO)
+    up = _uploader(hass)
+    await _run(up, aioclient_mock, NOW_UTC, **_feature_required(feature))
+    assert (up.state.outcome, up.state.reason, up.state.feature) == (
+        "refused", "feature_required", feature)
+    assert up.state.as_dict()["feature"] == feature
+    assert up.state.next_attempt_utc == NOW_UTC + timedelta(hours=6)
+    (record,) = [r for r in caplog.records if "irradiance upload" in r.getMessage()]
+    assert record.levelno == logging.INFO
+    assert f"refused ({words})" in record.getMessage()
+
+
+async def test_another_missing_feature_is_logged_again_and_a_stored_run_clears_it(
+        hass, aioclient_mock, caplog):
+    caplog.set_level(logging.INFO)
+    up = _uploader(hass)
+    t = NOW_UTC
+    for feature in ("measured_data", "measured_data", "ai_irradiance"):
+        await _run(up, aioclient_mock, t, **_feature_required(feature))
+        t += timedelta(hours=6)
+    records = [r.getMessage() for r in caplog.records if "irradiance upload" in r.getMessage()]
+    assert len(records) == 2, "the same refusal is said once, another feature again"
+    assert "measured_data" in records[0] and "ai_irradiance" in records[1]
+    await _run(up, aioclient_mock, t)
+    assert (up.state.outcome, up.state.feature) == ("ok", None)
+
+
 async def test_a_server_error_tries_again_at_the_next_run(hass, aioclient_mock, caplog):
     up = _uploader(hass)
     await _run(up, aioclient_mock, NOW_UTC, status=502)
@@ -452,6 +499,43 @@ async def test_with_a_sensor_it_uploads_six_times_an_hour(hass, freezer, aioclie
     assert status["outcome"] == "ok" and status["sensor_id"] == "ha-0123456789ab-abcdef"
     assert status["cadence_minutes"] == 10 and status["entity_id"] == ENTITY
     assert TOKEN not in str(diagnostics)
+
+
+async def test_a_token_changed_by_reconfigure_ends_a_token_refusal(hass, freezer, aioclient_mock):
+    """0.3.1: a read-only token keeps the upload quiet for 6 hours. A token
+    that may upload, given in the reconfigure step, reloads the entry, and the
+    next slot sends with it."""
+    entry = _entry({CONF_SCAN_INTERVAL: 60, **HORIZONTAL})
+    rows = AsyncMock(return_value=("W/m²", rows5(400.0)))
+    readonly = {"status": 403, "json": {"code": 403, "data": {},
+                                        "message": "This token is restricted to ReadOnly accesss"}}
+    with patch.object(irradiance, "async_five_minute_rows", rows):
+        await _setup(hass, freezer, aioclient_mock, entry)
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(f"{API_BASE}/forecast/power", json=envelope(make_payload()))
+        aioclient_mock.post(IRRADIANCE_URL, **readonly)
+        minutes, second = irradiance.slots(ENTRY_ID, 10)
+        hour = NOW_UTC.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        await _fire(hass, freezer, hour + timedelta(minutes=minutes[0], seconds=second))
+        status = (await async_get_config_entry_diagnostics(hass, entry))["irradiance_upload"]
+        assert (status["outcome"], status["reason"]) == ("refused", "token_scope")
+
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(f"{API_BASE}/system/list", json=envelope({"systems": [
+            {"system_id": SYSTEM_ID, "name": "Roof"}]}))
+        aioclient_mock.get(f"{API_BASE}/forecast/power", json=envelope(make_payload()))
+        aioclient_mock.post(IRRADIANCE_URL, json=envelope({"totals": {"stored": 1}}))
+        result = await entry.start_reconfigure_flow(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_API_TOKEN: "upload-token"})
+        assert result["reason"] == "reconfigure_successful"
+        await hass.async_block_till_done()
+        await _fire(hass, freezer, hour + timedelta(minutes=minutes[1], seconds=second))
+    (post,) = _irradiance_posts(aioclient_mock)
+    assert post[3]["Authorization"] == "Bearer upload-token"
+    status = (await async_get_config_entry_diagnostics(hass, entry))["irradiance_upload"]
+    assert (status["outcome"], status["reason"], status["feature"]) == ("ok", None, None)
+    assert "upload-token" not in str(await async_get_config_entry_diagnostics(hass, entry))
 
 
 async def test_without_an_irradiance_sensor_nothing_is_uploaded(hass, freezer, aioclient_mock):

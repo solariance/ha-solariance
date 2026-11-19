@@ -33,11 +33,12 @@ each further system. Each system becomes one device.
 **Options:** how often the forecast is fetched (15, 30 or 60 minutes; default 30), and the optional
 production and irradiance uploads (below).
 
-**Changing the token** (for example from a read-only token to one that can upload): the entry keeps
-the token it was set up with. Create the new token first, then delete the old one at
-[solariance.de/user/entwickler](https://www.solariance.de/user/entwickler/). At the next forecast
-update Home Assistant finds the old token refused and asks for a new one (*Re-authentication* under
-Settings → Devices & services): paste the new token there. The entry and its options stay.
+**Changing the token** (for example from a read-only token to one that can upload): Settings →
+Devices & services → Solariance → the entry's ⋮ menu → **Reconfigure**, and paste the new token. It
+is checked as at setup and must belong to the account that has the system; the entry reloads and
+keeps its options. Then delete the old token at
+[solariance.de/user/entwickler](https://www.solariance.de/user/entwickler/). With several systems,
+reconfigure each entry.
 
 ## Entities
 
@@ -171,10 +172,12 @@ reads Home Assistant's 5-minute statistics.
 - It needs an API token with the permission **Read and upload measured data** (or *Read and
   write*) and the measured-data opt-in, like the production upload. While Solariance does not take
   irradiance uploads yet, or your account does not include them, the integration says so once in
-  the log (as information, not as an error) and asks again every 6 hours; other refusals are kept
-  quiet the same way (the diagnostics show the next attempt). If Solariance reports that the id
-  already has values with another position, a repair issue *irradiance sensor id taken* appears:
-  submitting it continues under a new id.
+  the log (as information, not as an error) and asks again every 6 hours. The log and the
+  diagnostics (`feature`) name what the account lacks: `measured_data` (no measured data at all)
+  or `ai_irradiance` (the irradiance upload itself). Other refusals are kept quiet the same way
+  (the diagnostics show the next attempt). If Solariance reports that the id already has values
+  with another position, a repair issue *irradiance sensor id taken* appears: submitting it
+  continues under a new id.
 - None of this affects the forecast sensors or the production upload. Leave the field empty to
   switch the irradiance upload off.
 

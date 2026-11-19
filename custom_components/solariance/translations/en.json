@@ -24,6 +24,16 @@
         "data": {
           "api_token": "API token"
         }
+      },
+      "reconfigure": {
+        "title": "Change the API token of {name}",
+        "description": "Paste a new API token, for example one with the permission “Read and upload measured data” for the uploads. Create it at {token_url}. It must belong to the account that has this system; the options stay. Delete the old token there afterwards.",
+        "data": {
+          "api_token": "API token"
+        },
+        "data_description": {
+          "api_token": "The token is checked by listing your systems."
+        }
       }
     },
     "error": {
@@ -36,7 +46,8 @@
     },
     "abort": {
       "already_configured": "Every system of this account is already set up.",
-      "reauth_successful": "The new token is saved."
+      "reauth_successful": "The new token is saved.",
+      "reconfigure_successful": "The new token is saved."
     }
   },
   "options": {

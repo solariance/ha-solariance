@@ -1,18 +1,21 @@
-"""Setup, re-authentication and options."""
+"""Setup, re-authentication, reconfiguration and options."""
 from __future__ import annotations
 
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.solariance.const import (
     API_BASE,
     CONF_API_TOKEN,
     CONF_SCAN_INTERVAL,
     CONF_SYSTEM_ID,
+    CONF_UPLOAD_SENSOR,
     DOMAIN,
+    TOKEN_URL,
 )
 
-from .conftest import SYSTEM_ID, SYSTEMS, TOKEN, envelope
+from .conftest import NOW, SYSTEM_ID, SYSTEMS, TOKEN, envelope
 
 LIST_URL = f"{API_BASE}/system/list"
 
@@ -152,6 +155,81 @@ async def test_reauth_refuses_a_token_of_another_account(hass, aioclient_mock, c
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "system_not_in_account"}
     assert config_entry.data[CONF_API_TOKEN] == TOKEN
+
+
+# --- reconfiguration (0.3.1): a working token replaced without deleting the entry ---
+
+async def test_reconfigure_replaces_the_token_of_a_loaded_entry(
+        hass, aioclient_mock, setup_entry, caplog):
+    """E.g. a read-only token by one that may upload measured data: the entry
+    reloads with the new token, without the update-listener deprecation."""
+    aioclient_mock.get(LIST_URL, json=envelope({"systems": SYSTEMS}))
+    result = await setup_entry.start_reconfigure_flow(hass)
+    assert result["type"] is FlowResultType.FORM and result["step_id"] == "reconfigure"
+    assert result["description_placeholders"] == {"name": "Roof", "token_url": TOKEN_URL}
+    calls = len(aioclient_mock.mock_calls)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_TOKEN: " Bearer upload-token "})
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    assert setup_entry.data == {CONF_API_TOKEN: "upload-token", CONF_SYSTEM_ID: SYSTEM_ID}
+    assert setup_entry.state is config_entries.ConfigEntryState.LOADED
+    new_calls = aioclient_mock.mock_calls[calls:]
+    assert [str(c[1]).split("?")[0] for c in new_calls] == [LIST_URL, f"{API_BASE}/forecast/power"], (
+        "checked by listing the systems, then the reloaded entry asks for the forecast")
+    assert {c[3]["Authorization"] for c in new_calls} == {"Bearer upload-token"}
+    assert "update listener" not in caplog.text
+
+
+async def test_reconfigure_keeps_the_options(hass, freezer, aioclient_mock, mock_forecast):
+    freezer.move_to(NOW)
+    options = {CONF_SCAN_INTERVAL: 60, CONF_UPLOAD_SENSOR: "sensor.pv_energy"}
+    entry = MockConfigEntry(domain=DOMAIN, title="Roof", unique_id=SYSTEM_ID,
+                            data={CONF_API_TOKEN: TOKEN, CONF_SYSTEM_ID: SYSTEM_ID}, options=options)
+    entry.add_to_hass(hass)
+    aioclient_mock.get(LIST_URL, json=envelope({"systems": SYSTEMS}))
+    result = await entry.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_TOKEN: "upload-token"})
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    assert entry.options == options
+    assert entry.data[CONF_API_TOKEN] == "upload-token"
+
+
+async def test_reconfigure_refuses_a_token_of_another_account(hass, aioclient_mock, config_entry):
+    config_entry.add_to_hass(hass)
+    aioclient_mock.get(LIST_URL, json=envelope({"systems": SYSTEMS[1:]}))
+    result = await config_entry.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_TOKEN: "someone-elses-token"})
+    assert result["type"] is FlowResultType.FORM and result["step_id"] == "reconfigure"
+    assert result["errors"] == {"base": "system_not_in_account"}
+    assert config_entry.data[CONF_API_TOKEN] == TOKEN
+
+
+async def test_reconfigure_says_why_a_token_does_not_work_and_takes_the_next(
+        hass, aioclient_mock, config_entry):
+    config_entry.add_to_hass(hass)
+    result = await config_entry.start_reconfigure_flow(hass)
+    for answer, error in (({"status": 401}, "invalid_auth"),
+                          ({"status": 403, "json": {"code": 403, "data": {}}}, "invalid_auth"),
+                          ({"status": 429}, "rate_limited"),
+                          ({"status": 502}, "cannot_connect")):
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(LIST_URL, **answer)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_API_TOKEN: "bad-token"})
+        assert result["type"] is FlowResultType.FORM, answer
+        assert result["errors"] == {"base": error}, answer
+        assert config_entry.data[CONF_API_TOKEN] == TOKEN
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(LIST_URL, json=envelope({"systems": SYSTEMS}))
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_TOKEN: "upload-token"})
+    assert result["reason"] == "reconfigure_successful"
+    assert config_entry.data[CONF_API_TOKEN] == "upload-token"
 
 
 async def test_options_set_the_polling_interval(hass, setup_entry):

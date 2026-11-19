@@ -147,7 +147,22 @@ class SolarianceConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None
                                         ) -> ConfigFlowResult:
         """A revoked or expired token: ask for a new one for the same system."""
-        entry = self._get_reauth_entry()
+        return await self._async_new_token(self._get_reauth_entry(), "reauth_confirm",
+                                           "reauth_successful", user_input)
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None
+                                     ) -> ConfigFlowResult:
+        """Replace the entry's token while it still works (0.3.1), e.g. a
+        read-only token by one that may upload measured data. Checked as at
+        setup; the options stay and the entry reloads."""
+        return await self._async_new_token(self._get_reconfigure_entry(), "reconfigure",
+                                           "reconfigure_successful", user_input)
+
+    async def _async_new_token(self, entry: SolarianceConfigEntry, step_id: str, reason: str,
+                               user_input: dict[str, Any] | None) -> ConfigFlowResult:
+        """The token form of re-authentication and reconfiguration: the new
+        token must list the entry's system, i.e. belong to the account that
+        has it."""
         errors: dict[str, str] = {}
         if user_input is not None:
             token = normalise_token(user_input[CONF_API_TOKEN])
@@ -156,10 +171,9 @@ class SolarianceConfigFlow(ConfigFlow, domain=DOMAIN):
                                       for s in systems):
                 errors = {"base": "system_not_in_account"}
             if not errors:
-                return self.async_update_reload_and_abort(entry,
-                                                          data_updates={CONF_API_TOKEN: token})
-        return self.async_show_form(step_id="reauth_confirm", data_schema=TOKEN_SCHEMA,
-                                    errors=errors,
+                return self.async_update_reload_and_abort(
+                    entry, data_updates={CONF_API_TOKEN: token}, reason=reason)
+        return self.async_show_form(step_id=step_id, data_schema=TOKEN_SCHEMA, errors=errors,
                                     description_placeholders={"name": entry.title,
                                                               "token_url": TOKEN_URL})
 
