@@ -8,7 +8,10 @@ action that finds the best time to run a device on solar power.
 
 - Home Assistant 2026.9 or newer
 - A Solariance account with at least one PV system (the free plan works)
-- A personal API token: [solariance.de/user](https://www.solariance.de/user/) → API tokens. Read-only is enough.
+- A personal API token: [solariance.de/user/entwickler](https://www.solariance.de/user/entwickler/)
+  (account page → Developer → Manage API Tokens). *Read only* is enough for the forecast. The two
+  optional uploads need the permission *Read and upload measured data* (German: *Lesen und Messdaten
+  hochladen*): it reads like a read-only token and writes nothing but measured data.
 
 ## Installation
 
@@ -27,7 +30,14 @@ Settings → Devices & services → Add integration → **Solariance**, then pas
 is checked by listing your systems. With several systems you pick one; add the integration again for
 each further system. Each system becomes one device.
 
-**Options:** how often the forecast is fetched (15, 30 or 60 minutes; default 30).
+**Options:** how often the forecast is fetched (15, 30 or 60 minutes; default 30), and the optional
+production and irradiance uploads (below).
+
+**Changing the token** (for example from a read-only token to one that can upload): the entry keeps
+the token it was set up with. Create the new token first, then delete the old one at
+[solariance.de/user/entwickler](https://www.solariance.de/user/entwickler/). At the next forecast
+update Home Assistant finds the old token refused and asks for a new one (*Re-authentication* under
+Settings → Devices & services): paste the new token there. The entry and its options stay.
 
 ## Entities
 
@@ -112,6 +122,62 @@ actions:
 
 **`solariance.get_forecast`** returns the forecast per day (hourly or quarter-hourly) as response data.
 
+## Upload your production (optional)
+
+Since 0.3 the integration can send your PV production to Solariance, so the nightly calibration
+learns how your roof differs from the model. Choose your PV energy sensor (kWh, `total_increasing`,
+the one your Energy dashboard uses) under Settings → Devices & services → Solariance → Configure.
+
+- Every hour, at seven past, the last 48 full hours of the sensor's long-term statistics go to
+  Solariance (`POST measured/production/upload`, source `ha_sensor`).
+- Solariance only **fills** hours it does not have yet: an hour you uploaded yourself is never
+  replaced, and re-sending the same hours stores nothing new.
+- It needs an API token with the permission **Read and upload measured data** (or *Read and
+  write*; a read-only token cannot upload) and the measured-data opt-in in your Solariance account.
+  Measured data is a beta and not yet part of every plan: an account without it is refused
+  (`feature_required`). Until then the upload is refused, the integration says why in its
+  diagnostics and the log (once, not every hour), and the forecast sensors keep working.
+- Leave the field empty to switch the upload off.
+
+## Upload an irradiance sensor (optional)
+
+Since 0.3 the integration can also send what an irradiance sensor on your roof or in your garden
+measures, so Solariance learns how much sun actually reached your system. Choose the sensor under
+Settings → Devices & services → Solariance → Configure. Only sensors with the device class
+*irradiance* (W/m²) are offered: a pyranometer, a reference cell, a weather station's solar
+radiation. Light sensors in lux (*illuminance*) measure something else and are not offered. The
+sensor needs the state class `measurement` (irradiance sensors have it), because the integration
+reads Home Assistant's 5-minute statistics.
+
+- Two more questions follow: whether the sensor lies **horizontal** or in the **module plane**, and
+  what kind of sensor it is (weather station by default). For the module plane, its tilt (0° flat,
+  90° vertical) and azimuth (clockwise from north: 90° east, 180° south, 270° west), prefilled with
+  your system's largest roof face when Solariance has it.
+- Every 10 minutes the 5-minute means of the last 2 hours go to Solariance
+  (`POST measured/irradiance/upload`, interval 5, label `start`, source `ha_sensor`); the first run
+  of each hour sends the last 48 hours instead, to fill what a restart missed. That is 6 requests
+  per hour per system. The route allows 120 per hour per account, shared by all its systems, so with
+  more than 10 systems on the same token the integration runs every 20, 30 or 60 minutes instead and
+  stays at 60 requests per hour at most for up to 60 systems.
+- Solariance only **fills** values it does not have yet, so a repeat stores nothing new. Values in
+  BTU/(h⋅ft²) are converted to W/m²; any other unit is not sent.
+- The sensor goes to Solariance under an id like `ha-1a2b3c4d5e6f-a1b2c3`, derived from the entity
+  (not its name) and its position. Solariance fixes a sensor's position once it has values, so when
+  you change the position in the options, the integration starts a new series under a new id by
+  itself; the values sent before stay with the old one. Solariance keeps at most 8 sensor ids per
+  system, and every new position takes one: once they are taken, the upload is refused
+  (`too_many_sensors`, in the log and the diagnostics) until you erase an unused id through the API
+  (`DELETE measured/irradiance`, see [developer.solariance.de](https://developer.solariance.de)).
+- It needs an API token with the permission **Read and upload measured data** (or *Read and
+  write*) and the measured-data opt-in, like the production upload. While Solariance does not take
+  irradiance uploads yet, or your account does not include them, the integration says so once in
+  the log (as information, not as an error) and asks again every 6 hours; other refusals are kept
+  quiet the same way (the diagnostics show the next attempt). If Solariance reports that the id
+  already has values with another position, a repair issue *irradiance sensor id taken* appears:
+  submitting it continues under a new id.
+- None of this affects the forecast sensors or the production upload. Leave the field empty to
+  switch the irradiance upload off.
+
 ## Plans and limits
 
 The free plan covers today and tomorrow; Plus and above cover five days. Forecast requests are limited
@@ -145,12 +211,16 @@ as long as the API asks, and the sensors show *unavailable* meanwhile.
 ## Removal
 
 Delete the integration under Settings → Devices & services, then revoke the token at
-[solariance.de/user](https://www.solariance.de/user/).
+[solariance.de/user/entwickler](https://www.solariance.de/user/entwickler/).
 
 ## Privacy
 
 The integration talks only to `api.solariance.de` with your token. The token is stored in Home
-Assistant's configuration; nothing else leaves your Home Assistant.
+Assistant's configuration. Without an upload sensor nothing else leaves your Home Assistant; with
+one, that sensor's hourly energy (kWh per hour, nothing else) goes to Solariance once an hour, for
+your own system's calibration. With an irradiance sensor, its 5-minute means in W/m², the plane,
+tilt, azimuth and type you entered, and an id derived from the entity (not its name) go to
+Solariance every 10 minutes, for your own system's forecast.
 
 This is an integration by Solariance for Home Assistant. It is not affiliated with or endorsed by the
 Open Home Foundation.

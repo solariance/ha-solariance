@@ -144,6 +144,11 @@ class SolarianceCoordinator(DataUpdateCoordinator[SolarForecast]):
         self.client = SolarianceApiClient(async_get_clientsession(hass),
                                           entry.data[CONF_API_TOKEN])
         self.forecast_state = ForecastState()
+        # The production upload (0.3); None while no sensor is chosen.
+        self.upload_state = None
+        # The irradiance upload (0.3, an IrradianceUploader); None while no
+        # irradiance sensor is chosen.
+        self.irradiance = None
         # 204s with a Retry-After in a row: each one doubles the earliest retry.
         self._early_retries = 0
 
