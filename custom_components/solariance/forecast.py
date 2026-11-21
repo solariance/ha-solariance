@@ -25,6 +25,18 @@ STATUS (0.1.3). Next to `forecast`, the answer can carry `generated_utc` (when
 the run that produced it was written, ISO UTC) and `forecast_status`
 ("provisional" while the first forecast still uses a nearby point's weather,
 then "ready"). Both are optional: an API without them reads as before.
+
+THE STANDARD FORECAST. With the AI forecast, `ac_output_of_system` is the
+standard forecast plus the AI layers that are active for the system; plans
+with the AI forecast in the API also get the standard forecast beside it:
+
+    "standard_ac_output_of_system": 1980.0,          W, without any AI layer
+    "standard_energy_in_time_interval": 0.495,       kWh
+    "standard_energy_aggregated_sum_intraday": 9.1}  kWh
+
+and next to `forecast`: `delivered` ("ai" when an AI layer is in the values,
+else "standard") and `delivered_layers` (their names). All optional: an
+answer without them reads exactly as before, and nothing standard is shown.
 """
 from __future__ import annotations
 
@@ -43,6 +55,9 @@ class Interval:
     end: datetime
     power_w: float
     energy_kwh: float
+    # The standard forecast (without any AI layer), when the API sends it.
+    standard_power_w: float | None = None
+    standard_energy_kwh: float | None = None
 
     def overlap_kwh(self, start: datetime, end: datetime) -> float:
         """The share of this interval's energy that falls in [start, end)."""
@@ -62,6 +77,14 @@ class Day:
     @property
     def energy_kwh(self) -> float:
         return sum(i.energy_kwh for i in self.intervals)
+
+    @property
+    def standard_energy_kwh(self) -> float | None:
+        """The day's standard forecast (without any AI layer), or None when
+        the API did not send it for every interval of the day."""
+        if not self.intervals or any(i.standard_energy_kwh is None for i in self.intervals):
+            return None
+        return sum(i.standard_energy_kwh for i in self.intervals)
 
     @property
     def peak(self) -> Interval | None:
@@ -94,6 +117,15 @@ class SolarForecast:
     # does not say (before the 2026-11 API).
     generated_utc: datetime | None = None
     forecast_status: str | None = None
+    # Which value the forecast is ("ai" or "standard") and the AI layers in
+    # it; None and () when the API does not say.
+    delivered: str | None = None
+    delivered_layers: tuple[str, ...] = ()
+
+    @property
+    def has_standard(self) -> bool:
+        """Whether the answer carried the standard forecast beside the values."""
+        return any(i.standard_power_w is not None for i in self._intervals())
 
     def local_date(self, moment: datetime) -> date:
         return moment.astimezone(self.time_zone).date()
@@ -115,6 +147,14 @@ class SolarForecast:
         for interval in self._intervals():
             if interval.start <= moment < interval.end:
                 return interval.power_w
+        return None
+
+    def standard_power_at(self, moment: datetime) -> float | None:
+        """The standard forecast's mean power at `moment`, or None outside the
+        forecast or when the API did not send it."""
+        for interval in self._intervals():
+            if interval.start <= moment < interval.end:
+                return interval.standard_power_w
         return None
 
     def energy_between(self, start: datetime, end: datetime) -> float:
@@ -177,6 +217,24 @@ def _naive_utc(text: str) -> datetime:
     return value.astimezone(UTC)
 
 
+def parse_layers(value) -> tuple[str, ...]:
+    """The AI layers an answer names, as plain words; () for anything else."""
+    if not isinstance(value, list):
+        return ()
+    return tuple(word for word in (parse_status(item) for item in value) if word)
+
+
+def _optional_number(row: dict, name: str) -> float | None:
+    """A field the API may leave out: None when it is absent or not a number."""
+    if name not in row:
+        return None
+    try:
+        number = float(row[name])
+    except (TypeError, ValueError):
+        return None
+    return max(number, 0.0) if math.isfinite(number) else None
+
+
 def _row_start(row: dict, zone: ZoneInfo) -> datetime:
     if row.get("utc_time"):
         return _naive_utc(str(row["utc_time"]))
@@ -216,6 +274,8 @@ def parse_power_forecast(data: dict) -> SolarForecast:
                     end=start + step,
                     power_w=max(_number(row.get("ac_output_of_system")), 0.0),
                     energy_kwh=max(_number(row.get("energy_in_time_interval")), 0.0),
+                    standard_power_w=_optional_number(row, "standard_ac_output_of_system"),
+                    standard_energy_kwh=_optional_number(row, "standard_energy_in_time_interval"),
                 ))
             day = date.fromisoformat(str(rows[0]["local_time"])[:10])
         except (KeyError, TypeError, ValueError) as err:
@@ -226,7 +286,9 @@ def parse_power_forecast(data: dict) -> SolarForecast:
     return SolarForecast(system_id=str(data.get("system_id") or ""), time_zone=zone,
                          days=tuple(days),
                          generated_utc=parse_utc(data.get("generated_utc")),
-                         forecast_status=parse_status(data.get("forecast_status")))
+                         forecast_status=parse_status(data.get("forecast_status")),
+                         delivered=parse_status(data.get("delivered")),
+                         delivered_layers=parse_layers(data.get("delivered_layers")))
 
 
 @dataclass(frozen=True)

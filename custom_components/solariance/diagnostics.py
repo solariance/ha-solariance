@@ -47,12 +47,19 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant,
             "time_zone": str(forecast.time_zone),
             "forecast_status": forecast.forecast_status,
             "generated_utc": _iso(forecast.generated_utc),
+            # The standard forecast beside the values (plans with the AI
+            # forecast in the API); None and [] when the API does not say.
+            "delivered": forecast.delivered,
+            "delivered_layers": list(forecast.delivered_layers),
+            "has_standard": forecast.has_standard,
             "today": str(forecast.local_date(now)),
             "days": [
                 {"date": str(day.date), "intervals": len(day.intervals),
                  "steps_min": sorted({int((i.end - i.start).total_seconds() // 60)
                                       for i in day.intervals}),
-                 "energy_kwh": round(day.energy_kwh, 3)}
+                 "energy_kwh": round(day.energy_kwh, 3),
+                 "standard_energy_kwh": None if day.standard_energy_kwh is None
+                 else round(day.standard_energy_kwh, 3)}
                 for day in forecast.days
             ],
         },
