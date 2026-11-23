@@ -49,7 +49,7 @@ from .const import API_BASE
 from .forecast import parse_status, parse_utc
 
 _TIMEOUT = aiohttp.ClientTimeout(total=30)
-_USER_AGENT = "HomeAssistant-Solariance/0.3.1"
+_USER_AGENT = "HomeAssistant-Solariance/0.4.0"
 STATUS_HEADER = "X-Solariance-Forecast-Status"
 ETA_HEADER = "X-Solariance-Forecast-Eta"
 
