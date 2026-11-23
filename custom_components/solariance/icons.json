@@ -18,7 +18,10 @@
       "production_end_today": { "default": "mdi:weather-sunset-down" },
       "energy_production_day_3": { "default": "mdi:calendar-range" },
       "energy_production_day_4": { "default": "mdi:calendar-range" },
-      "energy_production_day_5": { "default": "mdi:calendar-range" }
+      "energy_production_day_5": { "default": "mdi:calendar-range" },
+      "standard_energy_production_today": { "default": "mdi:solar-power-variant-outline" },
+      "standard_energy_production_tomorrow": { "default": "mdi:solar-power-variant-outline" },
+      "standard_power_production_now": { "default": "mdi:solar-panel" }
     }
   },
   "services": {

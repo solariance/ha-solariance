@@ -180,6 +180,15 @@
       },
       "energy_production_day_5": {
         "name": "Prognose Energieerzeugung – Tag 5"
+      },
+      "standard_energy_production_today": {
+        "name": "Standardprognose Energieerzeugung – heute"
+      },
+      "standard_energy_production_tomorrow": {
+        "name": "Standardprognose Energieerzeugung – morgen"
+      },
+      "standard_power_production_now": {
+        "name": "Standardprognose Leistung – jetzt"
       }
     }
   },

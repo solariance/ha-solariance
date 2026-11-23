@@ -12,7 +12,8 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.const import UnitOfEnergy, UnitOfPower
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
@@ -72,12 +73,27 @@ def _hourly(offset: int) -> Callable[[SolarForecast, datetime], dict[str, Any]]:
             length = (interval.end - interval.start).total_seconds()
             hours[key] = [energy + interval.energy_kwh,
                           weighted + interval.power_w * length, seconds + length]
-        return {"hourly": [
+        out = [
             {"period_start": key.astimezone(forecast.time_zone).isoformat(),
              "energy_kwh": round(energy, 3),
              "power_w": round(weighted / seconds) if seconds else 0}
             for key, (energy, weighted, seconds) in sorted(hours.items())
-        ]}
+        ]
+        if day.standard_energy_kwh is not None:
+            # The standard forecast beside it, for a card that draws both.
+            standard: dict[datetime, list[float]] = {}
+            for interval in day.intervals:
+                key = interval.start.replace(minute=0, second=0, microsecond=0)
+                energy, weighted, seconds = standard.get(key, [0.0, 0.0, 0.0])
+                length = (interval.end - interval.start).total_seconds()
+                standard[key] = [energy + (interval.standard_energy_kwh or 0.0),
+                                 weighted + (interval.standard_power_w or 0.0) * length,
+                                 seconds + length]
+            for entry, (_key, (energy, weighted, seconds)) in zip(
+                    out, sorted(standard.items()), strict=True):
+                entry["standard_energy_kwh"] = round(energy, 3)
+                entry["standard_power_w"] = round(weighted / seconds) if seconds else 0
+        return {"hourly": out}
     return attributes
 
 
@@ -90,6 +106,11 @@ def _status_attributes(forecast: SolarForecast) -> dict[str, Any]:
         attributes["forecast_status"] = forecast.forecast_status
     if forecast.generated_utc is not None:
         attributes["generated_utc"] = forecast.generated_utc
+    if forecast.delivered is not None:
+        # Which value the state is: "ai" (AI layers in it; the standard
+        # forecast has sensors of its own) or "standard".
+        attributes["delivered"] = forecast.delivered
+        attributes["delivered_layers"] = list(forecast.delivered_layers)
     return attributes
 
 
@@ -126,6 +147,26 @@ def _peak_power(offset: int) -> ValueFn:
         peak = day.peak if day else None
         return round(peak.power_w) if peak else 0
     return value
+
+
+def _standard_day_energy(offset: int) -> ValueFn:
+    def value(forecast: SolarForecast, now: datetime) -> float | None:
+        day = forecast.day(offset, now)
+        energy = None if day is None else day.standard_energy_kwh
+        return None if energy is None else round(energy, 3)
+    return value
+
+
+def _has_standard_day(offset: int) -> Callable[[SolarForecast, datetime], bool]:
+    def available(forecast: SolarForecast, now: datetime) -> bool:
+        day = forecast.day(offset, now)
+        return day is not None and day.standard_energy_kwh is not None
+    return available
+
+
+def _standard_power_now(forecast: SolarForecast, now: datetime) -> float | None:
+    power = forecast.standard_power_at(now)
+    return None if power is None else round(power)
 
 
 def _production(edge: str) -> ValueFn:
@@ -211,10 +252,62 @@ SENSORS: tuple[SolarianceSensorEntityDescription, ...] = (
 )
 
 
+# The standard forecast (without any AI layer), for plans with the AI forecast
+# in the API. Off by default: the forecast sensors above already carry the
+# value to plan with. Added only once an answer carries the standard forecast
+# (or once they are in the entity registry), so an installation whose plan or
+# API does not send it sees no new entity at all.
+STANDARD_SENSORS: tuple[SolarianceSensorEntityDescription, ...] = (
+    SolarianceSensorEntityDescription(
+        key="standard_energy_production_today",
+        translation_key="standard_energy_production_today",
+        value_fn=_standard_day_energy(0), available_fn=_has_standard_day(0),
+        entity_registry_enabled_default=False, **_ENERGY),
+    SolarianceSensorEntityDescription(
+        key="standard_energy_production_tomorrow",
+        translation_key="standard_energy_production_tomorrow",
+        value_fn=_standard_day_energy(1), available_fn=_has_standard_day(1),
+        entity_registry_enabled_default=False, **_ENERGY),
+    SolarianceSensorEntityDescription(
+        key="standard_power_production_now", translation_key="standard_power_production_now",
+        value_fn=_standard_power_now,
+        available_fn=lambda forecast, now: forecast.standard_power_at(now) is not None,
+        entity_registry_enabled_default=False, **_POWER),
+)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: SolarianceConfigEntry,
                             async_add_entities: AddConfigEntryEntitiesCallback) -> None:
     coordinator = entry.runtime_data
     async_add_entities(SolarianceSensor(coordinator, description) for description in SENSORS)
+
+    registry = er.async_get(hass)
+    known = any(registry.async_get_entity_id("sensor", DOMAIN,
+                                             f"{coordinator.system_id}_{description.key}")
+                for description in STANDARD_SENSORS)
+    if known or (coordinator.data is not None and coordinator.data.has_standard):
+        async_add_entities(SolarianceSensor(coordinator, description)
+                           for description in STANDARD_SENSORS)
+        return
+
+    # The first answer that carries it adds them; the listener then leaves.
+    listening: list = []
+
+    @callback
+    def _stop_listening() -> None:
+        while listening:
+            listening.pop()()
+
+    @callback
+    def _add_when_sent() -> None:
+        if coordinator.data is None or not coordinator.data.has_standard:
+            return
+        _stop_listening()
+        async_add_entities(SolarianceSensor(coordinator, description)
+                           for description in STANDARD_SENSORS)
+
+    listening.append(coordinator.async_add_listener(_add_when_sent))
+    entry.async_on_unload(_stop_listening)
 
 
 class SolarianceSensor(CoordinatorEntity[SolarianceCoordinator], SensorEntity):

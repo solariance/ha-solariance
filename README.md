@@ -60,6 +60,23 @@ Names follow the core Forecast.Solar integration, so existing dashboards port ov
 nearby point, then `ready`) and `generated_utc` (when Solariance computed the forecast), whenever
 Solariance sends them.
 
+### The standard forecast beside the AI forecast
+
+With the AI forecast, the sensors above show the forecast to plan with: the standard forecast
+plus the AI layers that are active for your system. On plans with the AI forecast in the API,
+Solariance also sends the standard forecast (the same forecast without any AI layer). Then:
+
+| Entity | Unit | Notes |
+|---|---|---|
+| Standard forecast energy production – today / tomorrow | kWh | disabled by default |
+| Standard forecast power production – now | W | disabled by default |
+
+They appear with the first forecast that carries the standard forecast; without it nothing new
+appears. *Estimated energy production – today* and *Estimated power production – now* then also
+carry `delivered` (`ai` while an AI layer is in the values, else `standard`) and
+`delivered_layers`, and each `hourly` entry carries `standard_energy_kwh` and `standard_power_w`
+for a chart card that draws both curves. The Energy dashboard keeps the forecast to plan with.
+
 ## Energy dashboard
 
 Settings → Dashboards → Energy → Solar panels → *Solar production forecast* → choose your Solariance system.
